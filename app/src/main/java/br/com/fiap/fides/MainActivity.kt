@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import br.com.fiap.fides.core.ui.theme.FidesTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -21,8 +22,10 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun FidesApp() {
-    MaterialTheme {
-        Surface {
+    FidesTheme {
+        Surface(
+            color = MaterialTheme.colorScheme.background,
+        ) {
             Text(text = stringResource(R.string.app_name))
         }
     }
