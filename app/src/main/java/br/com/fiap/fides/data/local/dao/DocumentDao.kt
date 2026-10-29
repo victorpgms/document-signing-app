@@ -23,8 +23,14 @@ interface DocumentDao {
     @Query("SELECT * FROM document_signers WHERE documentId = :documentId")
     suspend fun getSigners(documentId: String): List<DocumentSignerEntity>
 
+    @Query("SELECT * FROM document_signers WHERE documentId = :documentId AND signerId = :signerId")
+    suspend fun getSigner(documentId: String, signerId: String): DocumentSignerEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveSigners(signers: List<DocumentSignerEntity>)
+
+    @Query("UPDATE document_signers SET signedAtEpochMillis = :signedAt WHERE documentId = :documentId AND signerId = :signerId")
+    suspend fun markSignerSigned(documentId: String, signerId: String, signedAt: Long)
 
     @Query("DELETE FROM document_signers WHERE documentId = :documentId")
     suspend fun deleteSigners(documentId: String)

@@ -11,4 +11,5 @@ data class DocumentSignerEntity(
     val signerId: String,
     val role: String,
     val required: Boolean,
+    val signedAtEpochMillis: Long? = null,
 )

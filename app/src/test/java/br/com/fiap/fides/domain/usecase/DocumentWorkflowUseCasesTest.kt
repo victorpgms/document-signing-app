@@ -5,6 +5,7 @@ import br.com.fiap.fides.domain.model.DocumentEvent
 import br.com.fiap.fides.domain.model.DocumentStatus
 import br.com.fiap.fides.domain.model.DocumentSigner
 import br.com.fiap.fides.domain.model.SignerRole
+import br.com.fiap.fides.domain.model.SignatureRecord
 import br.com.fiap.fides.domain.repository.DocumentRepository
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -52,4 +53,7 @@ private class FakeDocumentRepository : DocumentRepository {
     override suspend fun updateStatus(id: String, status: DocumentStatus, updatedAt: Instant) { document = document?.copy(status = status, updatedAt = updatedAt) }
     override suspend fun recordEvent(event: DocumentEvent) { if (event.type.name == "SENT") sentEvents += 1 }
     override suspend fun getEvents(documentId: String) = emptyList<DocumentEvent>()
+    override suspend fun markSignerSigned(documentId: String, signerId: String, signedAt: Instant) = Unit
+    override suspend fun saveSignature(record: SignatureRecord) = Unit
+    override suspend fun getSignatures(documentId: String) = emptyList<SignatureRecord>()
 }

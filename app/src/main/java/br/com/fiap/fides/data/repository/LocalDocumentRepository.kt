@@ -6,12 +6,14 @@ import br.com.fiap.fides.data.local.entity.DocumentEntity
 import br.com.fiap.fides.data.local.entity.DocumentEventEntity
 import br.com.fiap.fides.data.local.entity.DocumentSignerEntity
 import br.com.fiap.fides.data.local.entity.SignatureFieldEntity
+import br.com.fiap.fides.data.local.entity.SignatureRecordEntity
 import br.com.fiap.fides.domain.model.Document
 import br.com.fiap.fides.domain.model.DocumentEvent
 import br.com.fiap.fides.domain.model.DocumentEventType
 import br.com.fiap.fides.domain.model.DocumentSigner
 import br.com.fiap.fides.domain.model.DocumentStatus
 import br.com.fiap.fides.domain.model.SignatureField
+import br.com.fiap.fides.domain.model.SignatureRecord
 import br.com.fiap.fides.domain.model.SignerRole
 import br.com.fiap.fides.domain.repository.DocumentRepository
 import java.time.Instant
@@ -58,6 +60,17 @@ class LocalDocumentRepository(private val database: FidesDatabase) : DocumentRep
 
     override suspend fun getEvents(documentId: String): List<DocumentEvent> =
         database.documentEventDao().getForDocument(documentId).map { it.toDomain() }
+
+    override suspend fun markSignerSigned(documentId: String, signerId: String, signedAt: Instant) {
+        dao.markSignerSigned(documentId, signerId, signedAt.toEpochMilli())
+    }
+
+    override suspend fun saveSignature(record: SignatureRecord) {
+        database.signatureRecordDao().insert(record.toEntity())
+    }
+
+    override suspend fun getSignatures(documentId: String): List<SignatureRecord> =
+        database.signatureRecordDao().getForDocument(documentId).map { it.toDomain() }
 }
 
 private suspend fun DocumentEntity.toDomain(dao: br.com.fiap.fides.data.local.dao.DocumentDao): Document {
@@ -70,7 +83,15 @@ private suspend fun DocumentEntity.toDomain(dao: br.com.fiap.fides.data.local.da
         status = DocumentStatus.valueOf(status),
         createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
         updatedAt = Instant.ofEpochMilli(updatedAtEpochMillis),
-        signers = dao.getSigners(id).map { DocumentSigner(it.documentId, it.signerId, SignerRole.valueOf(it.role), it.required) },
+        signers = dao.getSigners(id).map {
+            DocumentSigner(
+                it.documentId,
+                it.signerId,
+                SignerRole.valueOf(it.role),
+                it.required,
+                it.signedAtEpochMillis?.let(Instant::ofEpochMilli),
+            )
+        },
         signatureFields = dao.getSignatureFields(id).map {
             SignatureField(it.id, it.documentId, it.signerId, it.pageIndex, it.x, it.y, it.width, it.height, it.required)
         },
@@ -92,7 +113,7 @@ private fun Document.toEntity() = DocumentEntity(
     previousVersionId = previousVersionId,
 )
 
-private fun DocumentSigner.toEntity() = DocumentSignerEntity(documentId, signerId, role.name, required)
+private fun DocumentSigner.toEntity() = DocumentSignerEntity(documentId, signerId, role.name, required, signedAt?.toEpochMilli())
 
 private fun SignatureField.toEntity() = SignatureFieldEntity(id, documentId, signerId, pageIndex, x, y, width, height, required)
 
@@ -105,4 +126,22 @@ private fun DocumentEventEntity.toDomain() = DocumentEvent(
     type = DocumentEventType.valueOf(type),
     occurredAt = Instant.ofEpochMilli(occurredAtEpochMillis),
     details = details,
+)
+
+private fun SignatureRecord.toEntity() = SignatureRecordEntity(
+    id = id,
+    documentId = documentId,
+    signerId = signerId,
+    fieldId = fieldId,
+    localFilePath = localFilePath,
+    createdAtEpochMillis = createdAt.toEpochMilli(),
+)
+
+private fun SignatureRecordEntity.toDomain() = SignatureRecord(
+    id = id,
+    documentId = documentId,
+    signerId = signerId,
+    fieldId = fieldId,
+    localFilePath = localFilePath,
+    createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
 )
