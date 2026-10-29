@@ -1,6 +1,7 @@
 package br.com.fiap.fides.domain.repository
 
 import kotlinx.coroutines.flow.Flow
+import br.com.fiap.fides.domain.model.UserRole
 
 data class UserSession(
     val userId: String,
