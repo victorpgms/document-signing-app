@@ -35,3 +35,22 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         db.execSQL("ALTER TABLE signers ADD COLUMN passwordHash TEXT NOT NULL DEFAULT ''")
     }
 }
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS document_events (
+                id TEXT NOT NULL,
+                documentId TEXT NOT NULL,
+                actorId TEXT NOT NULL,
+                type TEXT NOT NULL,
+                occurredAtEpochMillis INTEGER NOT NULL,
+                details TEXT,
+                PRIMARY KEY(id)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_document_events_documentId ON document_events(documentId)")
+    }
+}

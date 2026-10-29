@@ -3,9 +3,12 @@ package br.com.fiap.fides.data.repository
 import androidx.room.withTransaction
 import br.com.fiap.fides.data.local.FidesDatabase
 import br.com.fiap.fides.data.local.entity.DocumentEntity
+import br.com.fiap.fides.data.local.entity.DocumentEventEntity
 import br.com.fiap.fides.data.local.entity.DocumentSignerEntity
 import br.com.fiap.fides.data.local.entity.SignatureFieldEntity
 import br.com.fiap.fides.domain.model.Document
+import br.com.fiap.fides.domain.model.DocumentEvent
+import br.com.fiap.fides.domain.model.DocumentEventType
 import br.com.fiap.fides.domain.model.DocumentSigner
 import br.com.fiap.fides.domain.model.DocumentStatus
 import br.com.fiap.fides.domain.model.SignatureField
@@ -44,6 +47,17 @@ class LocalDocumentRepository(private val database: FidesDatabase) : DocumentRep
             dao.deleteById(id)
         }
     }
+
+    override suspend fun updateStatus(id: String, status: DocumentStatus, updatedAt: Instant) {
+        database.documentDao().updateStatus(id, status.name, updatedAt.toEpochMilli())
+    }
+
+    override suspend fun recordEvent(event: DocumentEvent) {
+        database.documentEventDao().insert(event.toEntity())
+    }
+
+    override suspend fun getEvents(documentId: String): List<DocumentEvent> =
+        database.documentEventDao().getForDocument(documentId).map { it.toDomain() }
 }
 
 private suspend fun DocumentEntity.toDomain(dao: br.com.fiap.fides.data.local.dao.DocumentDao): Document {
@@ -81,3 +95,14 @@ private fun Document.toEntity() = DocumentEntity(
 private fun DocumentSigner.toEntity() = DocumentSignerEntity(documentId, signerId, role.name, required)
 
 private fun SignatureField.toEntity() = SignatureFieldEntity(id, documentId, signerId, pageIndex, x, y, width, height, required)
+
+private fun DocumentEvent.toEntity() = DocumentEventEntity(id, documentId, actorId, type.name, occurredAt.toEpochMilli(), details)
+
+private fun DocumentEventEntity.toDomain() = DocumentEvent(
+    id = id,
+    documentId = documentId,
+    actorId = actorId,
+    type = DocumentEventType.valueOf(type),
+    occurredAt = Instant.ofEpochMilli(occurredAtEpochMillis),
+    details = details,
+)
