@@ -9,4 +9,6 @@ data class SignerEntity(
     val fullName: String,
     val email: String,
     val active: Boolean,
+    val phone: String = "",
+    val passwordHash: String = "",
 )

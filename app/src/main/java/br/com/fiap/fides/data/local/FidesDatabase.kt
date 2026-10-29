@@ -19,7 +19,7 @@ import br.com.fiap.fides.data.local.entity.UserEntity
         SignatureFieldEntity::class,
         UserEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class FidesDatabase : RoomDatabase() {

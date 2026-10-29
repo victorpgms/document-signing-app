@@ -28,3 +28,10 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         db.execSQL("ALTER TABLE documents ADD COLUMN previousVersionId TEXT DEFAULT NULL")
     }
 }
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE signers ADD COLUMN phone TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE signers ADD COLUMN passwordHash TEXT NOT NULL DEFAULT ''")
+    }
+}

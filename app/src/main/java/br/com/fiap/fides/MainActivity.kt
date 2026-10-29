@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -31,12 +32,14 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -60,11 +63,20 @@ import br.com.fiap.fides.data.local.DemoUserSeeder
 import br.com.fiap.fides.data.local.FidesDatabase
 import br.com.fiap.fides.data.local.FidesDatabaseProvider
 import br.com.fiap.fides.data.local.SessionStore
+import br.com.fiap.fides.data.repository.AdminOnlySignerRepository
 import br.com.fiap.fides.data.repository.LocalAuthRepository
+import br.com.fiap.fides.data.repository.LocalSignerRepository
+import br.com.fiap.fides.core.security.PasswordHasher
 import br.com.fiap.fides.domain.repository.AuthenticatedUser
 import br.com.fiap.fides.domain.repository.AuthRepository
 import br.com.fiap.fides.domain.repository.SessionRepository
+import br.com.fiap.fides.domain.repository.UserSession
+import br.com.fiap.fides.domain.model.Signer
 import br.com.fiap.fides.domain.model.UserRole
+import br.com.fiap.fides.domain.repository.SignerRepository
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import java.util.UUID
 
 private enum class FidesRoute(val route: String, val label: String) {
     LOGIN("login", "Login"),
@@ -104,19 +116,38 @@ class MainActivity : ComponentActivity() {
 private fun FidesApp(database: FidesDatabase, sessionRepository: SessionRepository) {
     val navController = rememberNavController()
     val authRepository = remember { LocalAuthRepository(database.userDao()) }
+    val signerRepository = remember {
+        AdminOnlySignerRepository(LocalSignerRepository(database.signerDao()), sessionRepository)
+    }
     var accountReady by remember { mutableStateOf(false) }
     var currentRole by remember { mutableStateOf<UserRole?>(null) }
+    val scope = rememberCoroutineScope()
     LaunchedEffect(database) {
         DemoUserSeeder.ensure(database)
         accountReady = true
     }
+    LaunchedEffect(accountReady) {
+        if (!accountReady) return@LaunchedEffect
+        sessionRepository.session.first()?.let { restored ->
+            currentRole = restored.role
+            val destination = if (restored.role == UserRole.SIGNER) {
+                FidesRoute.SIGNER_DASHBOARD.route
+            } else {
+                FidesRoute.DOCUMENTS.route
+            }
+            navController.navigate(destination) {
+                popUpTo(FidesRoute.LOGIN.route) { inclusive = true }
+            }
+        }
+    }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
-    val showBottomBar = currentDestination?.route in setOf(
-        FidesRoute.DOCUMENTS.route,
-        FidesRoute.SIGNERS.route,
-        FidesRoute.PROFILE.route,
-    )
+    val navigationItems = if (currentRole == UserRole.SIGNER) {
+        listOf(FidesRoute.SIGNER_DASHBOARD, FidesRoute.PROFILE)
+    } else {
+        listOf(FidesRoute.DOCUMENTS, FidesRoute.SIGNERS, FidesRoute.PROFILE)
+    }
+    val showBottomBar = currentDestination?.route in navigationItems.map { it.route }
 
     FidesTheme {
         Scaffold(
@@ -124,7 +155,7 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
             bottomBar = {
                 if (showBottomBar) {
                     NavigationBar {
-                        FidesRoute.entries.filter { it != FidesRoute.LOGIN }.forEach { item ->
+                        navigationItems.forEach { item ->
                             NavigationBarItem(
                                 selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
                                 onClick = {
@@ -159,7 +190,7 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
                         authRepository = authRepository,
                         enabled = accountReady,
                         onLoginSuccess = {
-                            runCatching { sessionRepository.save(it) }
+                            sessionRepository.save(it)
                             currentRole = it.role
                             val destination = if (it.role == UserRole.SIGNER) {
                                 FidesRoute.SIGNER_DASHBOARD.route
@@ -174,8 +205,25 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
                 }
                 composable(FidesRoute.DOCUMENTS.route) { DocumentsScreen() }
                 composable(FidesRoute.SIGNER_DASHBOARD.route) { SignerDashboardScreen() }
-                composable(FidesRoute.SIGNERS.route) { SignersScreen(canManage = currentRole == UserRole.ADMIN) }
-                composable(FidesRoute.PROFILE.route) { ProfileScreen() }
+                composable(FidesRoute.SIGNERS.route) {
+                    PersistentSignersScreen(
+                        canManage = currentRole == UserRole.ADMIN,
+                        repository = signerRepository,
+                    )
+                }
+                composable(FidesRoute.PROFILE.route) {
+                    ProfileScreen(
+                        onLogout = {
+                            scope.launch {
+                                sessionRepository.clear()
+                                currentRole = null
+                                navController.navigate(FidesRoute.LOGIN.route) {
+                                    popUpTo(FidesRoute.LOGIN.route) { inclusive = true }
+                                }
+                            }
+                        },
+                    )
+                }
             }
         }
     }
@@ -521,7 +569,7 @@ private fun SignerCard(initials: String, name: String, email: String, phone: Str
 }
 
 @Composable
-private fun ProfileScreen() {
+private fun ProfileScreen(onLogout: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -532,6 +580,7 @@ private fun ProfileScreen() {
         Text("Perfil", style = MaterialTheme.typography.headlineLarge)
         Text("Preferências da conta e aparência", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Button(onClick = {}) { Text("Configurar aparência") }
+        Button(onClick = onLogout) { Text("Sair") }
     }
 }
 

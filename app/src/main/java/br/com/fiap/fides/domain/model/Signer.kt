@@ -5,4 +5,6 @@ data class Signer(
     val fullName: String,
     val email: String,
     val active: Boolean = true,
+    val phone: String = "",
+    val passwordHash: String = "",
 )

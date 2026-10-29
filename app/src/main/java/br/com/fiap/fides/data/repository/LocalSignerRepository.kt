@@ -19,6 +19,6 @@ class LocalSignerRepository(private val dao: SignerDao) : SignerRepository {
     }
 }
 
-private fun SignerEntity.toDomain() = Signer(id, fullName, email, active)
+private fun SignerEntity.toDomain() = Signer(id, fullName, email, active, phone, passwordHash)
 
-private fun Signer.toEntity() = SignerEntity(id, fullName, email, active)
+private fun Signer.toEntity() = SignerEntity(id, fullName, email, active, phone, passwordHash)
