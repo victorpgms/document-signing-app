@@ -404,6 +404,20 @@ private fun SignerDashboardScreen() {
 
 @Composable
 private fun SignersScreen(canManage: Boolean) {
+    if (!canManage) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            FidesHeader()
+            Text("Acesso restrito", style = MaterialTheme.typography.headlineLarge)
+            Text(
+                "A gestão de signatários está disponível somente para usuários Administradores.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
+    }
     var showForm by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
