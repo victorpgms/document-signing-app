@@ -62,6 +62,7 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
     var phone by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedSignerId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingDelete by remember { mutableStateOf<Signer?>(null) }
 
     fun reload() {
@@ -145,7 +146,8 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
         items(filtered, key = { it.id }) { signer ->
             PersistentSignerCard(
                 signer = signer,
-                onSelect = {},
+                selected = selectedSignerId == signer.id,
+                onSelect = { selectedSignerId = signer.id },
                 onEdit = {
                     editingId = signer.id
                     name = signer.fullName
@@ -179,6 +181,7 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
 @Composable
 private fun PersistentSignerCard(
     signer: Signer,
+    selected: Boolean,
     onSelect: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -191,6 +194,9 @@ private fun PersistentSignerCard(
                 Text(signer.fullName, style = MaterialTheme.typography.titleMedium)
                 Text(signer.email, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(signer.phone, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (selected) {
+                    Text("Selecionado", color = MaterialTheme.colorScheme.primary)
+                }
                 Row {
                     TextButton(onClick = onEdit) { Text("Editar") }
                     TextButton(onClick = onDelete) { Text("Excluir") }
