@@ -159,7 +159,7 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
                         authRepository = authRepository,
                         enabled = accountReady,
                         onLoginSuccess = {
-                            sessionRepository.save(it)
+                            runCatching { sessionRepository.save(it) }
                             currentRole = it.role
                             val destination = if (it.role == UserRole.SIGNER) {
                                 FidesRoute.SIGNER_DASHBOARD.route
