@@ -13,4 +13,6 @@ data class DocumentEntity(
     val status: String,
     val createdAtEpochMillis: Long,
     val updatedAtEpochMillis: Long,
+    val version: Int = 1,
+    val previousVersionId: String? = null,
 )

@@ -21,3 +21,10 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_users_email ON users(email)")
     }
 }
+
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE documents ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+        db.execSQL("ALTER TABLE documents ADD COLUMN previousVersionId TEXT DEFAULT NULL")
+    }
+}

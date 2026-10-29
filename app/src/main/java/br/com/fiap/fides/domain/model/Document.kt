@@ -13,4 +13,6 @@ data class Document(
     val updatedAt: Instant,
     val signers: List<DocumentSigner> = emptyList(),
     val signatureFields: List<SignatureField> = emptyList(),
+    val version: Int = 1,
+    val previousVersionId: String? = null,
 )
