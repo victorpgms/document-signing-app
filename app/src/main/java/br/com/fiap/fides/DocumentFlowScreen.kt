@@ -135,7 +135,7 @@ internal fun DocumentFlowScreen(
         Spacer(Modifier.height(16.dp))
         when (step) {
             1 -> DocumentFileStep(title, { title = it }, imported, busy, { picker.launch(arrayOf("application/pdf")) })
-            2 -> SignerSelectionStep(signers, selectedIds, { id -> selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id }, role, { role = it })
+            2 -> SignerSelectionStep(signers, selectedIds, { id -> selectedIds = if (id in selectedIds) emptySet() else setOf(id) }, role, { role = it })
             3 -> FieldStep(fields, busy, ::addField)
             4 -> ReviewStep(review, busy) {
                 val id = documentId ?: return@ReviewStep
