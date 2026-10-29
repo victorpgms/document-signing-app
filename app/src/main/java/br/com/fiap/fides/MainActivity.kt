@@ -62,10 +62,12 @@ import br.com.fiap.fides.data.repository.LocalAuthRepository
 import br.com.fiap.fides.domain.repository.AuthenticatedUser
 import br.com.fiap.fides.domain.repository.AuthRepository
 import br.com.fiap.fides.domain.repository.SessionRepository
+import br.com.fiap.fides.domain.model.UserRole
 
 private enum class FidesRoute(val route: String, val label: String) {
     LOGIN("login", "Login"),
     DOCUMENTS("documents", "Documentos"),
+    SIGNER_DASHBOARD("signer-dashboard", "Pendências"),
     SIGNERS("signers", "Signatários"),
     PROFILE("profile", "Perfil"),
 }
@@ -101,6 +103,7 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
     val navController = rememberNavController()
     val authRepository = remember { LocalAuthRepository(database.userDao()) }
     var accountReady by remember { mutableStateOf(false) }
+    var currentRole by remember { mutableStateOf<UserRole?>(null) }
     LaunchedEffect(database) {
         DemoUserSeeder.ensure(database)
         accountReady = true
@@ -155,13 +158,20 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
                         enabled = accountReady,
                         onLoginSuccess = {
                             sessionRepository.save(it)
-                            navController.navigate(FidesRoute.DOCUMENTS.route) {
+                            currentRole = it.role
+                            val destination = if (it.role == UserRole.SIGNER) {
+                                FidesRoute.SIGNER_DASHBOARD.route
+                            } else {
+                                FidesRoute.DOCUMENTS.route
+                            }
+                            navController.navigate(destination) {
                                 popUpTo(FidesRoute.LOGIN.route) { inclusive = true }
                             }
                         },
                     )
                 }
                 composable(FidesRoute.DOCUMENTS.route) { DocumentsScreen() }
+                composable(FidesRoute.SIGNER_DASHBOARD.route) { SignerDashboardScreen() }
                 composable(FidesRoute.SIGNERS.route) { SignersScreen() }
                 composable(FidesRoute.PROFILE.route) { ProfileScreen() }
             }
@@ -350,6 +360,42 @@ private fun DocumentCard(document: DocumentPreview) {
                     .clip(RoundedCornerShape(8.dp)),
             )
             Text(document.status, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+        }
+    }
+}
+
+@Composable
+private fun SignerDashboardScreen() {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        item {
+            FidesHeader()
+            Spacer(Modifier.height(18.dp))
+            Text("Minhas assinaturas", style = MaterialTheme.typography.headlineLarge)
+            Text(
+                "Documentos recebidos para sua assinatura",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Contrato de prestação de serviço", style = MaterialTheme.typography.titleLarge)
+                    Text("Enviado hoje • 2 campos pendentes", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(onClick = {}) { Text("Abrir documento") }
+                }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Documentos assinados", style = MaterialTheme.typography.titleMedium)
+                    Text("Você ainda não concluiu este fluxo nesta demonstração.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
     }
 }
