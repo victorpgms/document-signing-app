@@ -32,8 +32,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,6 +44,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -50,8 +54,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import br.com.fiap.fides.core.ui.theme.FidesTheme
+import br.com.fiap.fides.data.local.DemoUserSeeder
+import br.com.fiap.fides.data.local.FidesDatabase
+import br.com.fiap.fides.data.local.FidesDatabaseProvider
+import br.com.fiap.fides.data.repository.LocalAuthRepository
+import br.com.fiap.fides.domain.repository.AuthenticatedUser
+import br.com.fiap.fides.domain.repository.AuthRepository
 
 private enum class FidesRoute(val route: String, val label: String) {
+    LOGIN("login", "Login"),
     DOCUMENTS("documents", "Documentos"),
     SIGNERS("signers", "Signatários"),
     PROFILE("profile", "Perfil"),
@@ -74,55 +85,171 @@ private val previewDocuments = listOf(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { FidesApp() }
+        setContent { FidesApp(FidesDatabaseProvider.get(applicationContext)) }
     }
 }
 
 @Composable
-private fun FidesApp() {
+private fun FidesApp(database: FidesDatabase) {
     val navController = rememberNavController()
+    val authRepository = remember { LocalAuthRepository(database.userDao()) }
+    var accountReady by remember { mutableStateOf(false) }
+    LaunchedEffect(database) {
+        DemoUserSeeder.ensure(database)
+        accountReady = true
+    }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    val showBottomBar = currentDestination?.route in setOf(
+        FidesRoute.DOCUMENTS.route,
+        FidesRoute.SIGNERS.route,
+        FidesRoute.PROFILE.route,
+    )
 
     FidesTheme {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
-                NavigationBar {
-                    FidesRoute.entries.forEach { item ->
-                        NavigationBarItem(
-                            selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
-                            onClick = {
-                                navController.navigate(item.route) {
-                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Text(item.label.first().toString()) },
-                            label = { Text(item.label) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            ),
-                        )
+                if (showBottomBar) {
+                    NavigationBar {
+                        FidesRoute.entries.filter { it != FidesRoute.LOGIN }.forEach { item ->
+                            NavigationBarItem(
+                                selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
+                                onClick = {
+                                    navController.navigate(item.route) {
+                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                icon = { Text(item.label.first().toString()) },
+                                label = { Text(item.label) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
+                            )
+                        }
                     }
                 }
             },
         ) { paddingValues ->
             NavHost(
                 navController = navController,
-                startDestination = FidesRoute.DOCUMENTS.route,
+                startDestination = FidesRoute.LOGIN.route,
                 modifier = Modifier.padding(paddingValues),
             ) {
+                composable(FidesRoute.LOGIN.route) {
+                    LoginScreen(
+                        authRepository = authRepository,
+                        enabled = accountReady,
+                        onLoginSuccess = {
+                            navController.navigate(FidesRoute.DOCUMENTS.route) {
+                                popUpTo(FidesRoute.LOGIN.route) { inclusive = true }
+                            }
+                        },
+                    )
+                }
                 composable(FidesRoute.DOCUMENTS.route) { DocumentsScreen() }
                 composable(FidesRoute.SIGNERS.route) { SignersScreen() }
                 composable(FidesRoute.PROFILE.route) { ProfileScreen() }
             }
         }
+    }
+}
+
+@Composable
+private fun LoginScreen(
+    authRepository: AuthRepository,
+    enabled: Boolean,
+    onLoginSuccess: (AuthenticatedUser) -> Unit,
+) {
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCredentials by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    LaunchedEffect(pendingCredentials) {
+        val credentials = pendingCredentials ?: return@LaunchedEffect
+        val authenticatedUser = authRepository.authenticate(
+            credentials.first,
+            credentials.second.toCharArray(),
+        )
+        pendingCredentials = null
+        if (authenticatedUser == null) {
+            error = "E-mail ou senha inválidos."
+        } else {
+            error = null
+            onLoginSuccess(authenticatedUser)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        FidesHeader()
+        Spacer(Modifier.height(28.dp))
+        Text("Bem-vindo ao Fides", style = MaterialTheme.typography.headlineLarge)
+        Text(
+            "Seus documentos, assinaturas e processos em um só lugar.",
+            modifier = Modifier.padding(top = 6.dp),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 28.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        ) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled,
+                    singleLine = true,
+                    label = { Text("E-mail institucional") },
+                    placeholder = { Text("victor@fides.local") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Email),
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled,
+                    singleLine = true,
+                    label = { Text("Senha de acesso") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Password),
+                )
+                if (error != null) {
+                    Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                }
+                Button(
+                    onClick = { pendingCredentials = email to password },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    enabled = enabled && email.isNotBlank() && password.isNotBlank(),
+                ) {
+                    Text("Entrar  →")
+                }
+            }
+        }
+        Text(
+            "Conta de demonstração: victor@fides.local / fides1234",
+            modifier = Modifier.padding(top = 18.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
