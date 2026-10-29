@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -172,7 +173,7 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
                 }
                 composable(FidesRoute.DOCUMENTS.route) { DocumentsScreen() }
                 composable(FidesRoute.SIGNER_DASHBOARD.route) { SignerDashboardScreen() }
-                composable(FidesRoute.SIGNERS.route) { SignersScreen() }
+                composable(FidesRoute.SIGNERS.route) { SignersScreen(canManage = currentRole == UserRole.ADMIN) }
                 composable(FidesRoute.PROFILE.route) { ProfileScreen() }
             }
         }
@@ -401,7 +402,12 @@ private fun SignerDashboardScreen() {
 }
 
 @Composable
-private fun SignersScreen() {
+private fun SignersScreen(canManage: Boolean) {
+    var showForm by rememberSaveable { mutableStateOf(false) }
+    var name by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var formError by rememberSaveable { mutableStateOf<String?>(null) }
+    val addedSigners = remember { mutableStateListOf<Pair<String, String>>() }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 18.dp),
@@ -415,7 +421,42 @@ private fun SignersScreen() {
                     Text("Signatários", style = MaterialTheme.typography.headlineLarge)
                     Text("● 3 pessoas cadastradas", color = MaterialTheme.colorScheme.primary)
                 }
-                Button(onClick = {}) { Text("Adicionar") }
+                if (canManage) {
+                    Button(onClick = { showForm = !showForm }) { Text(if (showForm) "Cancelar" else "Adicionar") }
+                }
+            }
+            if (showForm && canManage) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it; formError = null },
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    singleLine = true,
+                    label = { Text("Nome completo") },
+                )
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it; formError = null },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    singleLine = true,
+                    label = { Text("E-mail") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Email),
+                )
+                formError?.let { message -> Text(message, color = MaterialTheme.colorScheme.error) }
+                Button(
+                    onClick = {
+                        when {
+                            name.isBlank() -> formError = "Informe o nome completo."
+                            !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() -> formError = "Informe um e-mail válido."
+                            else -> {
+                                addedSigners.add(name.trim() to email.trim())
+                                name = ""
+                                email = ""
+                                showForm = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.padding(top = 8.dp),
+                ) { Text("Salvar signatário") }
             }
             OutlinedTextField(
                 value = "",
@@ -431,6 +472,14 @@ private fun SignersScreen() {
         item { SignerCard("MS", "Maria Silva", "maria.silva@email.com", "(11) 98765-4321") }
         item { SignerCard("JS", "João Santos", "joao.santos@email.com", "(21) 99123-4567") }
         item { SignerCard("AC", "Ana Costa", "ana.costa@email.com", "(31) 98877-6655") }
+        items(addedSigners) { (addedName, addedEmail) ->
+            SignerCard(
+                initials = addedName.trim().split(" ").take(2).joinToString("") { it.first().uppercase() },
+                name = addedName,
+                email = addedEmail,
+                phone = "Cadastro local",
+            )
+        }
     }
 }
 
