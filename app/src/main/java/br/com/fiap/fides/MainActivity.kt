@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -407,6 +408,7 @@ private fun SignersScreen(canManage: Boolean) {
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var formError by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedSigner by rememberSaveable { mutableStateOf<String?>(null) }
     val addedSigners = remember { mutableStateListOf<Pair<String, String>>() }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -468,24 +470,30 @@ private fun SignersScreen(canManage: Boolean) {
                 placeholder = { Text("Pesquisar por nome ou e-mail...") },
                 leadingIcon = { Text("⌕") },
             )
+            selectedSigner?.let { selected ->
+                Text("Selecionado: $selected", color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 10.dp))
+            }
         }
-        item { SignerCard("MS", "Maria Silva", "maria.silva@email.com", "(11) 98765-4321") }
-        item { SignerCard("JS", "João Santos", "joao.santos@email.com", "(21) 99123-4567") }
-        item { SignerCard("AC", "Ana Costa", "ana.costa@email.com", "(31) 98877-6655") }
+        item { SignerCard("MS", "Maria Silva", "maria.silva@email.com", "(11) 98765-4321") { selectedSigner = "Maria Silva" } }
+        item { SignerCard("JS", "João Santos", "joao.santos@email.com", "(21) 99123-4567") { selectedSigner = "João Santos" } }
+        item { SignerCard("AC", "Ana Costa", "ana.costa@email.com", "(31) 98877-6655") { selectedSigner = "Ana Costa" } }
         items(addedSigners) { (addedName, addedEmail) ->
             SignerCard(
                 initials = addedName.trim().split(" ").take(2).joinToString("") { it.first().uppercase() },
                 name = addedName,
                 email = addedEmail,
                 phone = "Cadastro local",
-            )
+            ) { selectedSigner = addedName }
         }
     }
 }
 
 @Composable
-private fun SignerCard(initials: String, name: String, email: String, phone: String) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+private fun SignerCard(initials: String, name: String, email: String, phone: String, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(initials, modifier = Modifier.size(42.dp), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.secondary)
             Spacer(Modifier.width(12.dp))
