@@ -57,9 +57,11 @@ import br.com.fiap.fides.core.ui.theme.FidesTheme
 import br.com.fiap.fides.data.local.DemoUserSeeder
 import br.com.fiap.fides.data.local.FidesDatabase
 import br.com.fiap.fides.data.local.FidesDatabaseProvider
+import br.com.fiap.fides.data.local.SessionStore
 import br.com.fiap.fides.data.repository.LocalAuthRepository
 import br.com.fiap.fides.domain.repository.AuthenticatedUser
 import br.com.fiap.fides.domain.repository.AuthRepository
+import br.com.fiap.fides.domain.repository.SessionRepository
 
 private enum class FidesRoute(val route: String, val label: String) {
     LOGIN("login", "Login"),
@@ -85,12 +87,17 @@ private val previewDocuments = listOf(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { FidesApp(FidesDatabaseProvider.get(applicationContext)) }
+        setContent {
+            FidesApp(
+                database = FidesDatabaseProvider.get(applicationContext),
+                sessionRepository = SessionStore(applicationContext),
+            )
+        }
     }
 }
 
 @Composable
-private fun FidesApp(database: FidesDatabase) {
+private fun FidesApp(database: FidesDatabase, sessionRepository: SessionRepository) {
     val navController = rememberNavController()
     val authRepository = remember { LocalAuthRepository(database.userDao()) }
     var accountReady by remember { mutableStateOf(false) }
@@ -147,6 +154,7 @@ private fun FidesApp(database: FidesDatabase) {
                         authRepository = authRepository,
                         enabled = accountReady,
                         onLoginSuccess = {
+                            sessionRepository.save(it)
                             navController.navigate(FidesRoute.DOCUMENTS.route) {
                                 popUpTo(FidesRoute.LOGIN.route) { inclusive = true }
                             }
@@ -165,7 +173,7 @@ private fun FidesApp(database: FidesDatabase) {
 private fun LoginScreen(
     authRepository: AuthRepository,
     enabled: Boolean,
-    onLoginSuccess: (AuthenticatedUser) -> Unit,
+    onLoginSuccess: suspend (AuthenticatedUser) -> Unit,
 ) {
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
