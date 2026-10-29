@@ -84,6 +84,7 @@ private enum class FidesRoute(val route: String, val label: String) {
     SIGNER_DASHBOARD("signer-dashboard", "Pendências"),
     SIGNERS("signers", "Signatários"),
     PROFILE("profile", "Perfil"),
+    CREATE_DOCUMENT("create-document", "Novo documento"),
 }
 
 private data class DocumentPreview(
@@ -203,8 +204,21 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
                         },
                     )
                 }
-                composable(FidesRoute.DOCUMENTS.route) { DocumentsScreen() }
+                composable(FidesRoute.DOCUMENTS.route) {
+                    DocumentsScreen(onCreate = { navController.navigate(FidesRoute.CREATE_DOCUMENT.route) })
+                }
                 composable(FidesRoute.SIGNER_DASHBOARD.route) { SignerDashboardScreen() }
+                composable(FidesRoute.CREATE_DOCUMENT.route) {
+                    DocumentFlowScreen(
+                        database = database,
+                        sessionRepository = sessionRepository,
+                        onFinished = {
+                            navController.navigate(FidesRoute.DOCUMENTS.route) {
+                                popUpTo(FidesRoute.DOCUMENTS.route) { inclusive = true }
+                            }
+                        },
+                    )
+                }
                 composable(FidesRoute.SIGNERS.route) {
                     PersistentSignersScreen(
                         canManage = currentRole == UserRole.ADMIN,
@@ -337,7 +351,7 @@ private fun FidesHeader() {
 }
 
 @Composable
-private fun DocumentsScreen() {
+private fun DocumentsScreen(onCreate: () -> Unit = {}) {
     var search by rememberSaveable { mutableStateOf("") }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -381,7 +395,7 @@ private fun DocumentsScreen() {
                         Text("Novo documento", style = MaterialTheme.typography.titleMedium)
                         Text("Carregue PDF para coletar assinaturas", style = MaterialTheme.typography.bodyMedium)
                     }
-                    Button(onClick = {}) { Text("+ Criar") }
+                    Button(onClick = onCreate) { Text("+ Criar") }
                 }
             }
         }
