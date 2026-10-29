@@ -76,6 +76,8 @@ import br.com.fiap.fides.domain.model.UserRole
 import br.com.fiap.fides.domain.repository.SignerRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 private enum class FidesRoute(val route: String, val label: String) {
@@ -253,14 +255,16 @@ private fun LoginScreen(
     var password by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingCredentials by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var authenticating by remember { mutableStateOf(false) }
 
     LaunchedEffect(pendingCredentials) {
         val credentials = pendingCredentials ?: return@LaunchedEffect
-        val authenticatedUser = authRepository.authenticate(
-            credentials.first,
-            credentials.second.toCharArray(),
-        )
+        authenticating = true
+        val authenticatedUser = withContext(Dispatchers.Default) {
+            authRepository.authenticate(credentials.first, credentials.second.toCharArray())
+        }
         pendingCredentials = null
+        authenticating = false
         if (authenticatedUser == null) {
             error = "E-mail ou senha inválidos."
         } else {
@@ -320,9 +324,9 @@ private fun LoginScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
-                    enabled = enabled && email.isNotBlank() && password.isNotBlank(),
+                    enabled = enabled && !authenticating && email.isNotBlank() && password.isNotBlank(),
                 ) {
-                    Text("Entrar  →")
+                    Text(if (authenticating) "Entrando..." else "Entrar  →")
                 }
             }
         }
