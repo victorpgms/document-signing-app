@@ -31,8 +31,10 @@ class CreateDocumentDraftUseCase(
         if (signers.map { it.signerId }.toSet().size != signers.size) throw DocumentValidationException("Não repita o mesmo signatário no documento.")
 
         val now = Instant.now(clock)
+        val documentId = UUID.randomUUID().toString()
+        val normalizedSigners = signers.map { it.copy(documentId = documentId) }
         return Document(
-            id = UUID.randomUUID().toString(),
+            id = documentId,
             ownerId = ownerId,
             title = title.trim(),
             originalFileName = originalFileName,
@@ -40,7 +42,7 @@ class CreateDocumentDraftUseCase(
             status = DocumentStatus.DRAFT,
             createdAt = now,
             updatedAt = now,
-            signers = signers,
+            signers = normalizedSigners,
         ).also { document ->
             repository.save(document)
             repository.recordEvent(DocumentEvent(UUID.randomUUID().toString(), document.id, ownerId, DocumentEventType.CREATED, now))

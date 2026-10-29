@@ -135,7 +135,19 @@ internal fun DocumentFlowScreen(
         Spacer(Modifier.height(16.dp))
         when (step) {
             1 -> DocumentFileStep(title, { title = it }, imported, busy, { picker.launch(arrayOf("application/pdf")) })
-            2 -> SignerSelectionStep(signers, selectedIds, { id -> selectedIds = if (id in selectedIds) emptySet() else setOf(id) }, role, { role = it })
+            2 -> SignerSelectionStep(
+                signers = signers,
+                selected = selectedIds,
+                onToggle = { id ->
+                    message = null
+                    selectedIds = if (id in selectedIds) emptySet() else setOf(id)
+                },
+                role = role,
+                onRole = {
+                    message = null
+                    role = it
+                },
+            )
             3 -> FieldStep(fields, busy, ::addField)
             4 -> ReviewStep(review, busy) {
                 val id = documentId ?: return@ReviewStep
@@ -156,7 +168,16 @@ internal fun DocumentFlowScreen(
             if (step < 4) {
                 Button(
                     enabled = !busy && when (step) { 1 -> title.isNotBlank() && imported != null; 2 -> selectedIds.isNotEmpty(); 3 -> fields.isNotEmpty(); else -> false },
-                    onClick = { when (step) { 1 -> step = 2; 2 -> createDraftAndContinue(); 3 -> loadReview() } },
+                    onClick = {
+                        when (step) {
+                            1 -> {
+                                message = null
+                                step = 2
+                            }
+                            2 -> createDraftAndContinue()
+                            3 -> loadReview()
+                        }
+                    },
                 ) { Text("Continuar") }
             }
         }
@@ -186,14 +207,25 @@ private fun SignerSelectionStep(signers: List<Signer>, selected: Set<String>, on
             }
         }
         item {
-            Text("Papel do participante selecionado", modifier = Modifier.padding(top = 8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Classificação do signatário", modifier = Modifier.padding(top = 8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SignerRole.values().forEach { item ->
-                    OutlinedButton(onClick = { onRole(item.name) }) { Text(if (role == item.name) "✓ ${item.name}" else item.name) }
+                    OutlinedButton(
+                        onClick = { onRole(item.name) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (role == item.name) "✓ ${item.label()}" else item.label(), maxLines = 1)
+                    }
                 }
             }
         }
     }
+}
+
+private fun SignerRole.label(): String = when (this) {
+    SignerRole.CONTRACTOR -> "Contratante"
+    SignerRole.CONTRACTED -> "Contratado"
+    SignerRole.WITNESS -> "Testemunha"
 }
 
 @Composable

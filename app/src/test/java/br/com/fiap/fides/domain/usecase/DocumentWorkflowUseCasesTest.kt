@@ -26,6 +26,21 @@ class DocumentWorkflowUseCasesTest {
     }
 
     @Test
+    fun `draft normalizes signer document id`() {
+        runBlocking {
+            val document = CreateDocumentDraftUseCase(FakeDocumentRepository())(
+                ownerId = "admin",
+                title = "Contrato",
+                originalFileName = "contrato.pdf",
+                localFilePath = "/private/contrato.pdf",
+                signers = listOf(DocumentSigner("imported-pdf-id", "signer", SignerRole.CONTRACTOR)),
+            )
+
+            assertEquals(document.id, document.signers.single().documentId)
+        }
+    }
+
+    @Test
     fun `sending is idempotent after first status transition`() {
         runBlocking {
             val repository = FakeDocumentRepository()
