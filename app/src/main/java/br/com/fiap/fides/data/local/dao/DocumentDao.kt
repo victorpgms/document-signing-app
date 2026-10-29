@@ -11,7 +11,13 @@ import br.com.fiap.fides.data.local.entity.SignatureFieldEntity
 
 @Dao
 interface DocumentDao {
-    @Query("SELECT * FROM documents WHERE ownerId = :userId ORDER BY updatedAtEpochMillis DESC")
+    @Query("""
+        SELECT DISTINCT d.*
+        FROM documents d
+        LEFT JOIN document_signers ds ON ds.documentId = d.id
+        WHERE d.ownerId = :userId OR ds.signerId = :userId
+        ORDER BY d.updatedAtEpochMillis DESC
+    """)
     suspend fun getAllForUser(userId: String): List<DocumentEntity>
 
     @Query("SELECT * FROM documents WHERE id = :id")

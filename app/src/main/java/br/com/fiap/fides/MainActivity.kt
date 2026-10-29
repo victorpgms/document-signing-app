@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -65,6 +66,7 @@ import br.com.fiap.fides.data.local.FidesDatabaseProvider
 import br.com.fiap.fides.data.local.SessionStore
 import br.com.fiap.fides.data.repository.AdminOnlySignerRepository
 import br.com.fiap.fides.data.repository.LocalAuthRepository
+import br.com.fiap.fides.data.repository.LocalDocumentRepository
 import br.com.fiap.fides.data.repository.LocalSignerRepository
 import br.com.fiap.fides.core.security.PasswordHasher
 import br.com.fiap.fides.domain.repository.AuthenticatedUser
@@ -72,6 +74,7 @@ import br.com.fiap.fides.domain.repository.AuthRepository
 import br.com.fiap.fides.domain.repository.SessionRepository
 import br.com.fiap.fides.domain.repository.UserSession
 import br.com.fiap.fides.domain.model.Signer
+import br.com.fiap.fides.domain.model.DocumentStatus
 import br.com.fiap.fides.domain.model.UserRole
 import br.com.fiap.fides.domain.repository.SignerRepository
 import kotlinx.coroutines.flow.first
@@ -87,6 +90,7 @@ private enum class FidesRoute(val route: String, val label: String) {
     SIGNERS("signers", "Signatários"),
     PROFILE("profile", "Perfil"),
     CREATE_DOCUMENT("create-document", "Novo documento"),
+    SIGNER_SIGN("signer-sign", "Assinar documento"),
 }
 
 private data class DocumentPreview(
@@ -118,12 +122,13 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun FidesApp(database: FidesDatabase, sessionRepository: SessionRepository) {
     val navController = rememberNavController()
-    val authRepository = remember { LocalAuthRepository(database.userDao()) }
+    val authRepository = remember { LocalAuthRepository(database.userDao(), database.signerDao()) }
     val signerRepository = remember {
         AdminOnlySignerRepository(LocalSignerRepository(database.signerDao()), sessionRepository)
     }
     var accountReady by remember { mutableStateOf(false) }
     var currentRole by remember { mutableStateOf<UserRole?>(null) }
+    var selectedSignerDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(database) {
         DemoUserSeeder.ensure(database)
@@ -209,7 +214,16 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
                 composable(FidesRoute.DOCUMENTS.route) {
                     DocumentsScreen(onCreate = { navController.navigate(FidesRoute.CREATE_DOCUMENT.route) })
                 }
-                composable(FidesRoute.SIGNER_DASHBOARD.route) { SignerDashboardScreen() }
+                composable(FidesRoute.SIGNER_DASHBOARD.route) {
+                    SignerDashboardScreen(
+                        database = database,
+                        sessionRepository = sessionRepository,
+                        onOpenDocument = { documentId ->
+                            selectedSignerDocumentId = documentId
+                            navController.navigate(FidesRoute.SIGNER_SIGN.route)
+                        },
+                    )
+                }
                 composable(FidesRoute.CREATE_DOCUMENT.route) {
                     DocumentFlowScreen(
                         database = database,
@@ -220,6 +234,28 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
                             }
                         },
                     )
+                }
+                composable(FidesRoute.SIGNER_SIGN.route) {
+                    val documentId = selectedSignerDocumentId
+                    if (documentId == null) {
+                        SignerDashboardScreen(
+                            database = database,
+                            sessionRepository = sessionRepository,
+                            onOpenDocument = { selectedSignerDocumentId = it },
+                        )
+                    } else {
+                        SignerSigningScreen(
+                            database = database,
+                            sessionRepository = sessionRepository,
+                            documentId = documentId,
+                            onFinished = {
+                                selectedSignerDocumentId = null
+                                navController.navigate(FidesRoute.SIGNER_DASHBOARD.route) {
+                                    popUpTo(FidesRoute.SIGNER_DASHBOARD.route) { inclusive = true }
+                                }
+                            },
+                        )
+                    }
                 }
                 composable(FidesRoute.SIGNERS.route) {
                     PersistentSignersScreen(
@@ -428,6 +464,54 @@ private fun DocumentCard(document: DocumentPreview) {
                     .clip(RoundedCornerShape(8.dp)),
             )
             Text(document.status, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+        }
+    }
+}
+
+@Composable
+private fun SignerDashboardScreen(
+    database: FidesDatabase,
+    sessionRepository: SessionRepository,
+    onOpenDocument: (String) -> Unit,
+) {
+    val session by sessionRepository.session.collectAsState(initial = null)
+    val repository = remember(database) { LocalDocumentRepository(database) }
+    var documents by remember { mutableStateOf(emptyList<br.com.fiap.fides.domain.model.Document>()) }
+
+    LaunchedEffect(session?.userId) {
+        val userId = session?.userId ?: return@LaunchedEffect
+        documents = repository.getAllForUser(userId).filter { it.status != DocumentStatus.DRAFT }
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        item {
+            FidesHeader()
+            Spacer(Modifier.height(18.dp))
+            Text("Minhas assinaturas", style = MaterialTheme.typography.headlineLarge)
+            Text("Documentos recebidos para sua assinatura", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (documents.isEmpty()) {
+            item {
+                Text("Nenhum documento pendente.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        items(documents, key = { it.id }) { document ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(document.title, style = MaterialTheme.typography.titleLarge)
+                    Text("${document.originalFileName} · ${document.status}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${document.signatureFields.count { it.signerId == session?.userId && it.required }} campo(s) seu(s)")
+                    if (document.status != DocumentStatus.COMPLETED) {
+                        Button(onClick = { onOpenDocument(document.id) }) { Text("Abrir e assinar") }
+                    } else {
+                        Text("Documento concluído", color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
         }
     }
 }

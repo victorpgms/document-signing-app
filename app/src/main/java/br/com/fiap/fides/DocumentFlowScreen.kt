@@ -1,18 +1,25 @@
 package br.com.fiap.fides
 
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -32,9 +39,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import br.com.fiap.fides.core.pdf.ImportedPdf
 import br.com.fiap.fides.core.pdf.PdfImportService
+import br.com.fiap.fides.core.pdf.PdfPageRenderer
 import br.com.fiap.fides.data.local.FidesDatabase
 import br.com.fiap.fides.data.repository.LocalDocumentRepository
 import br.com.fiap.fides.data.repository.LocalSignerRepository
@@ -62,6 +76,7 @@ internal fun DocumentFlowScreen(
     val documentRepository = remember(database) { LocalDocumentRepository(database) }
     val signerRepository = remember(database) { LocalSignerRepository(database.signerDao()) }
     val importService = remember(context) { PdfImportService(context) }
+    val pageRenderer = remember { PdfPageRenderer() }
     var step by rememberSaveable { mutableStateOf(1) }
     var title by rememberSaveable { mutableStateOf("") }
     var imported by remember { mutableStateOf<ImportedPdf?>(null) }
@@ -70,6 +85,8 @@ internal fun DocumentFlowScreen(
     var role by rememberSaveable { mutableStateOf(SignerRole.CONTRACTOR.name) }
     var documentId by rememberSaveable { mutableStateOf<String?>(null) }
     var fields by remember { mutableStateOf(emptyList<br.com.fiap.fides.domain.model.SignatureField>()) }
+    var selectedPageIndex by rememberSaveable { mutableStateOf(0) }
+    var pageBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var review by remember { mutableStateOf<DocumentReview?>(null) }
     var message by rememberSaveable { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -91,6 +108,11 @@ internal fun DocumentFlowScreen(
 
     LaunchedEffect(Unit) { signers = signerRepository.getAll() }
 
+    LaunchedEffect(imported?.localFilePath, selectedPageIndex) {
+        val filePath = imported?.localFilePath ?: return@LaunchedEffect
+        pageBitmap = runCatching { pageRenderer.renderPage(filePath, selectedPageIndex) }.getOrNull()
+    }
+
     fun createDraftAndContinue() {
         val ownerId = session?.userId ?: return
         val pdf = imported ?: return
@@ -110,13 +132,19 @@ internal fun DocumentFlowScreen(
         }
     }
 
-    fun addField() {
+    fun addFieldAt(x: Float, y: Float) {
         val id = documentId ?: return
         val signerId = selectedIds.firstOrNull() ?: return
         scope.launch {
-            runCatching { AddSignatureFieldUseCase(documentRepository)(id, signerId, 0, .08f, .78f, .36f, .12f) }
-                .onSuccess { fields = fields + it; message = "Campo adicionado à página 1." }
+            busy = true
+            val width = .36f
+            val height = .12f
+            val normalizedX = x.coerceIn(0f, 1f - width)
+            val normalizedY = y.coerceIn(0f, 1f - height)
+            runCatching { AddSignatureFieldUseCase(documentRepository)(id, signerId, selectedPageIndex, normalizedX, normalizedY, width, height) }
+                .onSuccess { fields = fields + it; message = "Campo adicionado à página ${selectedPageIndex + 1}." }
                 .onFailure { message = it.message ?: "Não foi possível adicionar o campo." }
+            busy = false
         }
     }
 
@@ -148,7 +176,15 @@ internal fun DocumentFlowScreen(
                     role = it
                 },
             )
-            3 -> FieldStep(fields, busy, ::addField)
+            3 -> FieldStep(
+                bitmap = pageBitmap,
+                pageIndex = selectedPageIndex,
+                pageCount = imported?.pageCount ?: 1,
+                fields = fields,
+                busy = busy,
+                onPageChange = { selectedPageIndex = it },
+                onAddAt = ::addFieldAt,
+            )
             4 -> ReviewStep(review, busy) {
                 val id = documentId ?: return@ReviewStep
                 val ownerId = session?.userId ?: return@ReviewStep
@@ -229,11 +265,58 @@ private fun SignerRole.label(): String = when (this) {
 }
 
 @Composable
-private fun FieldStep(fields: List<br.com.fiap.fides.domain.model.SignatureField>, busy: Boolean, onAdd: () -> Unit) {
+private fun FieldStep(
+    bitmap: Bitmap?,
+    pageIndex: Int,
+    pageCount: Int,
+    fields: List<br.com.fiap.fides.domain.model.SignatureField>,
+    busy: Boolean,
+    onPageChange: (Int) -> Unit,
+    onAddAt: (Float, Float) -> Unit,
+) {
+    var pageSize by remember { mutableStateOf(IntSize.Zero) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Campos de assinatura", style = MaterialTheme.typography.titleLarge)
-        Text("Os campos usam coordenadas normalizadas e permanecem dentro da página.")
-        Button(onClick = onAdd, enabled = !busy) { Text("Adicionar campo na página 1") }
+        Text("Toque no PDF para posicionar um campo. O retângulo permanece dentro da página.")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { onPageChange((pageIndex - 1).coerceAtLeast(0)) }, enabled = pageIndex > 0) { Text("Anterior") }
+            Text("Página ${pageIndex + 1} de $pageCount")
+            OutlinedButton(onClick = { onPageChange((pageIndex + 1).coerceAtMost(pageCount - 1)) }, enabled = pageIndex < pageCount - 1) { Text("Próxima") }
+        }
+        bitmap?.let { page ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(page.width.toFloat() / page.height.toFloat())
+                    .background(Color.LightGray)
+                    .onSizeChanged { pageSize = it }
+                    .pointerInput(pageIndex, page) {
+                        detectTapGestures { offset ->
+                            if (!busy && pageSize.width > 0 && pageSize.height > 0) {
+                                onAddAt(offset.x / pageSize.width, offset.y / pageSize.height)
+                            }
+                        }
+                    },
+            ) {
+                Image(page.asImageBitmap(), contentDescription = "Página ${pageIndex + 1} do PDF", modifier = Modifier.fillMaxSize())
+                Canvas(Modifier.fillMaxSize()) {
+                    fields.filter { it.pageIndex == pageIndex }.forEach { field ->
+                        drawRect(
+                            color = Color(0x663F05BE),
+                            topLeft = Offset(field.x * size.width, field.y * size.height),
+                            size = androidx.compose.ui.geometry.Size(field.width * size.width, field.height * size.height),
+                        )
+                        drawRect(
+                            color = Color(0xFF3F05BE),
+                            topLeft = Offset(field.x * size.width, field.y * size.height),
+                            size = androidx.compose.ui.geometry.Size(field.width * size.width, field.height * size.height),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f),
+                        )
+                    }
+                }
+            }
+        } ?: Text("Carregando página do PDF...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedButton(onClick = { onAddAt(.08f, .78f) }, enabled = !busy) { Text("Adicionar no centro inferior") }
         fields.forEach { field -> Text("Campo ${field.id.take(8)} · página ${field.pageIndex + 1} · ${field.width} × ${field.height}") }
     }
 }
