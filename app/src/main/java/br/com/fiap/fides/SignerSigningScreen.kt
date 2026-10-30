@@ -152,7 +152,10 @@ internal fun SignerSigningScreen(
             }
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Desenhe sua assinatura", style = MaterialTheme.typography.titleMedium)
                     Canvas(
@@ -185,8 +188,8 @@ internal fun SignerSigningScreen(
                         }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(onClick = ::clearDrawing, enabled = !busy) { Text("Limpar") }
-                        Button(onClick = ::confirmSignature, enabled = !busy) { Text(if (busy) "Salvando..." else "Confirmar assinatura") }
+                        OutlinedButton(onClick = ::clearDrawing, enabled = !busy, shape = MaterialTheme.shapes.small) { Text("Limpar") }
+                        Button(onClick = ::confirmSignature, enabled = !busy, shape = MaterialTheme.shapes.small) { Text(if (busy) "Salvando..." else "Confirmar assinatura") }
                     }
                 }
             }
@@ -196,7 +199,10 @@ internal fun SignerSigningScreen(
         }
         signedFilePath?.let {
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("PDF assinado salvo", style = MaterialTheme.typography.titleMedium)
                         Text("A versão original foi preservada e uma nova versão foi gerada.")
@@ -204,8 +210,9 @@ internal fun SignerSigningScreen(
                             OutlinedButton(
                                 onClick = { exportLauncher.launch("${document?.title ?: "documento"}-assinado.pdf") },
                                 enabled = !busy,
+                                shape = MaterialTheme.shapes.small,
                             ) { Text("Exportar PDF assinado") }
-                            Button(onClick = onFinished, enabled = !busy) { Text("Voltar") }
+                            Button(onClick = onFinished, enabled = !busy, shape = MaterialTheme.shapes.small) { Text("Voltar") }
                         }
                         exportMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                     }

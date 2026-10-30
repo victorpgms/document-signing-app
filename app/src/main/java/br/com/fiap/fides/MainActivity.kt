@@ -162,7 +162,10 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
                 if (showBottomBar) {
-                    NavigationBar {
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 0.dp,
+                    ) {
                         navigationItems.forEach { item ->
                             NavigationBarItem(
                                 selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
@@ -173,7 +176,18 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
                                         restoreState = true
                                     }
                                 },
-                                icon = { Text(item.label.first().toString()) },
+                                icon = {
+                                    Text(
+                                        when (item) {
+                                            FidesRoute.DOCUMENTS -> "▤"
+                                            FidesRoute.SIGNER_DASHBOARD -> "✓"
+                                            FidesRoute.SIGNERS -> "♙"
+                                            FidesRoute.PROFILE -> "◉"
+                                            else -> "•"
+                                        },
+                                        style = MaterialTheme.typography.titleMedium,
+                                    )
+                                },
                                 label = { Text(item.label) },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -357,6 +371,7 @@ private fun LoginScreen(
                 }
                 Button(
                     onClick = { pendingCredentials = email to password },
+                    shape = MaterialTheme.shapes.small,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
@@ -385,7 +400,9 @@ private fun FidesHeader() {
     Image(
         painter = painterResource(logo),
         contentDescription = stringResource(R.string.app_name),
-        modifier = Modifier.height(28.dp),
+        modifier = Modifier
+            .width(96.dp)
+            .height(32.dp),
         contentScale = ContentScale.Fit,
     )
 }
@@ -424,7 +441,10 @@ private fun DocumentsScreen(onCreate: () -> Unit = {}) {
             }
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -435,7 +455,7 @@ private fun DocumentsScreen(onCreate: () -> Unit = {}) {
                         Text("Novo documento", style = MaterialTheme.typography.titleMedium)
                         Text("Carregue PDF para coletar assinaturas", style = MaterialTheme.typography.bodyMedium)
                     }
-                    Button(onClick = onCreate) { Text("+ Criar") }
+                    Button(onClick = onCreate, shape = MaterialTheme.shapes.small) { Text("+ Criar") }
                 }
             }
         }
@@ -500,13 +520,16 @@ private fun SignerDashboardScreen(
             }
         }
         items(documents, key = { it.id }) { document ->
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(document.title, style = MaterialTheme.typography.titleLarge)
                     Text("${document.originalFileName} · ${document.status}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("${document.signatureFields.count { it.signerId == session?.userId && it.required }} campo(s) seu(s)")
                     if (document.status != DocumentStatus.COMPLETED) {
-                        Button(onClick = { onOpenDocument(document.id) }) { Text("Abrir e assinar") }
+                        Button(onClick = { onOpenDocument(document.id) }, shape = MaterialTheme.shapes.small) { Text("Abrir e assinar") }
                     } else {
                         Text("Documento concluído", color = MaterialTheme.colorScheme.primary)
                     }
@@ -533,11 +556,14 @@ private fun SignerDashboardScreen() {
             )
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Contrato de prestação de serviço", style = MaterialTheme.typography.titleLarge)
                     Text("Enviado hoje • 2 campos pendentes", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button(onClick = {}) { Text("Abrir documento") }
+                    Button(onClick = {}, shape = MaterialTheme.shapes.small) { Text("Abrir documento") }
                 }
             }
         }
@@ -588,7 +614,7 @@ private fun SignersScreen(canManage: Boolean) {
                     Text("● 3 pessoas cadastradas", color = MaterialTheme.colorScheme.primary)
                 }
                 if (canManage) {
-                    Button(onClick = { showForm = !showForm }) { Text(if (showForm) "Cancelar" else "Adicionar") }
+                    Button(onClick = { showForm = !showForm }, shape = MaterialTheme.shapes.small) { Text(if (showForm) "Cancelar" else "Adicionar") }
                 }
             }
             if (showForm && canManage) {
@@ -621,6 +647,7 @@ private fun SignersScreen(canManage: Boolean) {
                             }
                         }
                     },
+                    shape = MaterialTheme.shapes.small,
                     modifier = Modifier.padding(top = 8.dp),
                 ) { Text("Salvar signatário") }
             }
@@ -655,7 +682,9 @@ private fun SignersScreen(canManage: Boolean) {
 @Composable
 private fun SignerCard(initials: String, name: String, email: String, phone: String, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -681,8 +710,8 @@ private fun ProfileScreen(onLogout: () -> Unit) {
         FidesHeader()
         Text("Perfil", style = MaterialTheme.typography.headlineLarge)
         Text("Preferências da conta e aparência", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Button(onClick = {}) { Text("Configurar aparência") }
-        Button(onClick = onLogout) { Text("Sair") }
+        Button(onClick = {}, shape = MaterialTheme.shapes.small) { Text("Configurar aparência") }
+        Button(onClick = onLogout, shape = MaterialTheme.shapes.small) { Text("Sair") }
     }
 }
 

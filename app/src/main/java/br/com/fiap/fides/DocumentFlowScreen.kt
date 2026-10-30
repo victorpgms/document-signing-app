@@ -226,10 +226,11 @@ internal fun DocumentFlowScreen(
         message?.let { Text(it, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 12.dp)) }
         Spacer(Modifier.weight(1f))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            OutlinedButton(onClick = { if (step == 1) onFinished() else step -= 1 }) { Text(if (step == 1) "Cancelar" else "Voltar") }
+            OutlinedButton(onClick = { if (step == 1) onFinished() else step -= 1 }, shape = MaterialTheme.shapes.small) { Text(if (step == 1) "Cancelar" else "Voltar") }
             if (step < 4) {
                 Button(
                     enabled = !busy && when (step) { 1 -> title.isNotBlank() && imported != null; 2 -> selectedIds.isNotEmpty(); 3 -> fields.isNotEmpty(); else -> false },
+                    shape = MaterialTheme.shapes.small,
                     onClick = {
                         when (step) {
                             1 -> {
@@ -251,7 +252,7 @@ private fun DocumentFileStep(title: String, onTitleChange: (String) -> Unit, imp
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Documento", style = MaterialTheme.typography.titleLarge)
         OutlinedTextField(title, onTitleChange, Modifier.fillMaxWidth(), label = { Text("Título") }, singleLine = true)
-        Button(onClick = onPick, enabled = !busy) { Text(if (busy) "Importando..." else "Selecionar PDF") }
+        Button(onClick = onPick, enabled = !busy, shape = MaterialTheme.shapes.small) { Text(if (busy) "Importando..." else "Selecionar PDF") }
         imported?.let { Text("${it.originalFileName} · ${it.pageCount} página(s)", color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
@@ -261,7 +262,10 @@ private fun SignerSelectionStep(signers: List<Signer>, selected: Set<String>, on
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item { Text("Participantes", style = MaterialTheme.typography.titleLarge); Text("Selecione pelo menos um signatário.") }
         items(signers, key = { it.id }) { signer ->
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = signer.id in selected, onCheckedChange = { onToggle(signer.id) })
                     Column { Text(signer.fullName); Text(signer.email, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -274,6 +278,7 @@ private fun SignerSelectionStep(signers: List<Signer>, selected: Set<String>, on
                 SignerRole.values().forEach { item ->
                     OutlinedButton(
                         onClick = { onRole(item.name) },
+                        shape = MaterialTheme.shapes.small,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(if (role == item.name) "✓ ${item.label()}" else item.label(), maxLines = 1)
@@ -311,16 +316,16 @@ private fun FieldStep(
         Text("Campos de assinatura", style = MaterialTheme.typography.titleLarge)
         Text("Toque no PDF para posicionar um campo. O retângulo permanece dentro da página.")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { onPageChange((pageIndex - 1).coerceAtLeast(0)) }, enabled = pageIndex > 0) { Text("Anterior") }
+            OutlinedButton(onClick = { onPageChange((pageIndex - 1).coerceAtLeast(0)) }, enabled = pageIndex > 0, shape = MaterialTheme.shapes.small) { Text("Anterior") }
             Text("Página ${pageIndex + 1} de $pageCount")
-            OutlinedButton(onClick = { onPageChange((pageIndex + 1).coerceAtMost(pageCount - 1)) }, enabled = pageIndex < pageCount - 1) { Text("Próxima") }
+            OutlinedButton(onClick = { onPageChange((pageIndex + 1).coerceAtMost(pageCount - 1)) }, enabled = pageIndex < pageCount - 1, shape = MaterialTheme.shapes.small) { Text("Próxima") }
         }
         bitmap?.let { page ->
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(page.width.toFloat() / page.height.toFloat())
-                    .background(Color.LightGray)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .onSizeChanged { pageSize = it }
                     .pointerInput(pageIndex, page, fields, busy) {
                         detectDragGestures(
@@ -382,11 +387,11 @@ private fun FieldStep(
                 }
             }
         } ?: Text("Carregando página do PDF...", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedButton(onClick = { onAddAt(.08f, .78f) }, enabled = !busy) { Text("Adicionar no centro inferior") }
+        OutlinedButton(onClick = { onAddAt(.08f, .78f) }, enabled = !busy, shape = MaterialTheme.shapes.small) { Text("Adicionar no centro inferior") }
         fields.forEach { field ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Campo ${field.id.take(8)} - página ${field.pageIndex + 1} - ${field.width} x ${field.height}")
-                OutlinedButton(onClick = { onDelete(field.id) }, enabled = !busy) { Text("Excluir") }
+                OutlinedButton(onClick = { onDelete(field.id) }, enabled = !busy, shape = MaterialTheme.shapes.small) { Text("Excluir") }
             }
         }
     }
@@ -402,6 +407,6 @@ private fun ReviewStep(review: DocumentReview?, busy: Boolean, onSend: () -> Uni
             Text("${it.fieldCount} campo(s) de assinatura")
             Text(it.message, color = MaterialTheme.colorScheme.primary)
         }
-        Button(onClick = onSend, enabled = !busy) { Text(if (busy) "Enviando..." else "Enviar solicitação") }
+        Button(onClick = onSend, enabled = !busy, shape = MaterialTheme.shapes.small) { Text(if (busy) "Enviando..." else "Enviar solicitação") }
     }
 }
