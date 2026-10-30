@@ -53,6 +53,34 @@ class SignatureWorkflowUseCasesTest {
         val completed = CompleteDocumentUseCase(repository)("doc", "admin")
         assertEquals(DocumentStatus.COMPLETED, completed.status)
     }
+
+    @Test
+    fun `sent document cannot have fields deleted`() {
+        runBlocking {
+            val field = br.com.fiap.fides.domain.model.SignatureField("field", "doc", "signer", 0, .1f, .1f, .2f, .1f)
+            val repository = WorkflowFakeRepository(
+                draft().copy(
+                    status = DocumentStatus.SENT,
+                    signatureFields = listOf(field),
+                ),
+            )
+
+            assertThrows(DocumentValidationException::class.java) {
+                runBlocking { DeleteSignatureFieldUseCase(repository)("doc", "field") }
+            }
+        }
+    }
+
+    @Test
+    fun `completion rejects a required signer without signature`() {
+        runBlocking {
+            val repository = WorkflowFakeRepository(draft().copy(status = DocumentStatus.PARTIALLY_SIGNED))
+
+            assertThrows(DocumentValidationException::class.java) {
+                runBlocking { CompleteDocumentUseCase(repository)("doc", "admin") }
+            }
+        }
+    }
 }
 
 private class WorkflowFakeRepository(var document: Document) : DocumentRepository {
