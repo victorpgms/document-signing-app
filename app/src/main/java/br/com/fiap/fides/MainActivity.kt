@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -65,6 +66,7 @@ import br.com.fiap.fides.data.local.FidesDatabaseProvider
 import br.com.fiap.fides.data.local.SessionStore
 import br.com.fiap.fides.data.repository.AdminOnlySignerRepository
 import br.com.fiap.fides.data.repository.LocalAuthRepository
+import br.com.fiap.fides.data.repository.LocalDocumentRepository
 import br.com.fiap.fides.data.repository.LocalSignerRepository
 import br.com.fiap.fides.core.security.PasswordHasher
 import br.com.fiap.fides.domain.repository.AuthenticatedUser
@@ -72,10 +74,13 @@ import br.com.fiap.fides.domain.repository.AuthRepository
 import br.com.fiap.fides.domain.repository.SessionRepository
 import br.com.fiap.fides.domain.repository.UserSession
 import br.com.fiap.fides.domain.model.Signer
+import br.com.fiap.fides.domain.model.DocumentStatus
 import br.com.fiap.fides.domain.model.UserRole
 import br.com.fiap.fides.domain.repository.SignerRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 private enum class FidesRoute(val route: String, val label: String) {
@@ -84,6 +89,8 @@ private enum class FidesRoute(val route: String, val label: String) {
     SIGNER_DASHBOARD("signer-dashboard", "Pendências"),
     SIGNERS("signers", "Signatários"),
     PROFILE("profile", "Perfil"),
+    CREATE_DOCUMENT("create-document", "Novo documento"),
+    SIGNER_SIGN("signer-sign", "Assinar documento"),
 }
 
 private data class DocumentPreview(
@@ -115,12 +122,13 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun FidesApp(database: FidesDatabase, sessionRepository: SessionRepository) {
     val navController = rememberNavController()
-    val authRepository = remember { LocalAuthRepository(database.userDao()) }
+    val authRepository = remember { LocalAuthRepository(database.userDao(), database.signerDao()) }
     val signerRepository = remember {
         AdminOnlySignerRepository(LocalSignerRepository(database.signerDao()), sessionRepository)
     }
     var accountReady by remember { mutableStateOf(false) }
     var currentRole by remember { mutableStateOf<UserRole?>(null) }
+    var selectedSignerDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(database) {
         DemoUserSeeder.ensure(database)
@@ -154,7 +162,10 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
                 if (showBottomBar) {
-                    NavigationBar {
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 0.dp,
+                    ) {
                         navigationItems.forEach { item ->
                             NavigationBarItem(
                                 selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
@@ -165,7 +176,18 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
                                         restoreState = true
                                     }
                                 },
-                                icon = { Text(item.label.first().toString()) },
+                                icon = {
+                                    Text(
+                                        when (item) {
+                                            FidesRoute.DOCUMENTS -> "▤"
+                                            FidesRoute.SIGNER_DASHBOARD -> "✓"
+                                            FidesRoute.SIGNERS -> "♙"
+                                            FidesRoute.PROFILE -> "◉"
+                                            else -> "•"
+                                        },
+                                        style = MaterialTheme.typography.titleMedium,
+                                    )
+                                },
                                 label = { Text(item.label) },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -203,8 +225,52 @@ private fun FidesApp(database: FidesDatabase, sessionRepository: SessionReposito
                         },
                     )
                 }
-                composable(FidesRoute.DOCUMENTS.route) { DocumentsScreen() }
-                composable(FidesRoute.SIGNER_DASHBOARD.route) { SignerDashboardScreen() }
+                composable(FidesRoute.DOCUMENTS.route) {
+                    DocumentsScreen(onCreate = { navController.navigate(FidesRoute.CREATE_DOCUMENT.route) })
+                }
+                composable(FidesRoute.SIGNER_DASHBOARD.route) {
+                    SignerDashboardScreen(
+                        database = database,
+                        sessionRepository = sessionRepository,
+                        onOpenDocument = { documentId ->
+                            selectedSignerDocumentId = documentId
+                            navController.navigate(FidesRoute.SIGNER_SIGN.route)
+                        },
+                    )
+                }
+                composable(FidesRoute.CREATE_DOCUMENT.route) {
+                    DocumentFlowScreen(
+                        database = database,
+                        sessionRepository = sessionRepository,
+                        onFinished = {
+                            navController.navigate(FidesRoute.DOCUMENTS.route) {
+                                popUpTo(FidesRoute.DOCUMENTS.route) { inclusive = true }
+                            }
+                        },
+                    )
+                }
+                composable(FidesRoute.SIGNER_SIGN.route) {
+                    val documentId = selectedSignerDocumentId
+                    if (documentId == null) {
+                        SignerDashboardScreen(
+                            database = database,
+                            sessionRepository = sessionRepository,
+                            onOpenDocument = { selectedSignerDocumentId = it },
+                        )
+                    } else {
+                        SignerSigningScreen(
+                            database = database,
+                            sessionRepository = sessionRepository,
+                            documentId = documentId,
+                            onFinished = {
+                                selectedSignerDocumentId = null
+                                navController.navigate(FidesRoute.SIGNER_DASHBOARD.route) {
+                                    popUpTo(FidesRoute.SIGNER_DASHBOARD.route) { inclusive = true }
+                                }
+                            },
+                        )
+                    }
+                }
                 composable(FidesRoute.SIGNERS.route) {
                     PersistentSignersScreen(
                         canManage = currentRole == UserRole.ADMIN,
@@ -239,14 +305,16 @@ private fun LoginScreen(
     var password by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingCredentials by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var authenticating by remember { mutableStateOf(false) }
 
     LaunchedEffect(pendingCredentials) {
         val credentials = pendingCredentials ?: return@LaunchedEffect
-        val authenticatedUser = authRepository.authenticate(
-            credentials.first,
-            credentials.second.toCharArray(),
-        )
+        authenticating = true
+        val authenticatedUser = withContext(Dispatchers.Default) {
+            authRepository.authenticate(credentials.first, credentials.second.toCharArray())
+        }
         pendingCredentials = null
+        authenticating = false
         if (authenticatedUser == null) {
             error = "E-mail ou senha inválidos."
         } else {
@@ -303,12 +371,13 @@ private fun LoginScreen(
                 }
                 Button(
                     onClick = { pendingCredentials = email to password },
+                    shape = MaterialTheme.shapes.small,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
-                    enabled = enabled && email.isNotBlank() && password.isNotBlank(),
+                    enabled = enabled && !authenticating && email.isNotBlank() && password.isNotBlank(),
                 ) {
-                    Text("Entrar  →")
+                    Text(if (authenticating) "Entrando..." else "Entrar  →")
                 }
             }
         }
@@ -331,13 +400,15 @@ private fun FidesHeader() {
     Image(
         painter = painterResource(logo),
         contentDescription = stringResource(R.string.app_name),
-        modifier = Modifier.height(28.dp),
+        modifier = Modifier
+            .width(96.dp)
+            .height(32.dp),
         contentScale = ContentScale.Fit,
     )
 }
 
 @Composable
-private fun DocumentsScreen() {
+private fun DocumentsScreen(onCreate: () -> Unit = {}) {
     var search by rememberSaveable { mutableStateOf("") }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -370,7 +441,10 @@ private fun DocumentsScreen() {
             }
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -381,7 +455,7 @@ private fun DocumentsScreen() {
                         Text("Novo documento", style = MaterialTheme.typography.titleMedium)
                         Text("Carregue PDF para coletar assinaturas", style = MaterialTheme.typography.bodyMedium)
                     }
-                    Button(onClick = {}) { Text("+ Criar") }
+                    Button(onClick = onCreate, shape = MaterialTheme.shapes.small) { Text("+ Criar") }
                 }
             }
         }
@@ -415,6 +489,57 @@ private fun DocumentCard(document: DocumentPreview) {
 }
 
 @Composable
+private fun SignerDashboardScreen(
+    database: FidesDatabase,
+    sessionRepository: SessionRepository,
+    onOpenDocument: (String) -> Unit,
+) {
+    val session by sessionRepository.session.collectAsState(initial = null)
+    val repository = remember(database) { LocalDocumentRepository(database) }
+    var documents by remember { mutableStateOf(emptyList<br.com.fiap.fides.domain.model.Document>()) }
+
+    LaunchedEffect(session?.userId) {
+        val userId = session?.userId ?: return@LaunchedEffect
+        documents = repository.getAllForUser(userId).filter { it.status != DocumentStatus.DRAFT }
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        item {
+            FidesHeader()
+            Spacer(Modifier.height(18.dp))
+            Text("Minhas assinaturas", style = MaterialTheme.typography.headlineLarge)
+            Text("Documentos recebidos para sua assinatura", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (documents.isEmpty()) {
+            item {
+                Text("Nenhum documento pendente.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        items(documents, key = { it.id }) { document ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(document.title, style = MaterialTheme.typography.titleLarge)
+                    Text("${document.originalFileName} · ${document.status}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${document.signatureFields.count { it.signerId == session?.userId && it.required }} campo(s) seu(s)")
+                    if (document.status != DocumentStatus.COMPLETED) {
+                        Button(onClick = { onOpenDocument(document.id) }, shape = MaterialTheme.shapes.small) { Text("Abrir e assinar") }
+                    } else {
+                        Text("Documento concluído", color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SignerDashboardScreen() {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -431,11 +556,14 @@ private fun SignerDashboardScreen() {
             )
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Contrato de prestação de serviço", style = MaterialTheme.typography.titleLarge)
                     Text("Enviado hoje • 2 campos pendentes", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button(onClick = {}) { Text("Abrir documento") }
+                    Button(onClick = {}, shape = MaterialTheme.shapes.small) { Text("Abrir documento") }
                 }
             }
         }
@@ -486,7 +614,7 @@ private fun SignersScreen(canManage: Boolean) {
                     Text("● 3 pessoas cadastradas", color = MaterialTheme.colorScheme.primary)
                 }
                 if (canManage) {
-                    Button(onClick = { showForm = !showForm }) { Text(if (showForm) "Cancelar" else "Adicionar") }
+                    Button(onClick = { showForm = !showForm }, shape = MaterialTheme.shapes.small) { Text(if (showForm) "Cancelar" else "Adicionar") }
                 }
             }
             if (showForm && canManage) {
@@ -519,6 +647,7 @@ private fun SignersScreen(canManage: Boolean) {
                             }
                         }
                     },
+                    shape = MaterialTheme.shapes.small,
                     modifier = Modifier.padding(top = 8.dp),
                 ) { Text("Salvar signatário") }
             }
@@ -553,7 +682,9 @@ private fun SignersScreen(canManage: Boolean) {
 @Composable
 private fun SignerCard(initials: String, name: String, email: String, phone: String, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -579,8 +710,8 @@ private fun ProfileScreen(onLogout: () -> Unit) {
         FidesHeader()
         Text("Perfil", style = MaterialTheme.typography.headlineLarge)
         Text("Preferências da conta e aparência", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Button(onClick = {}) { Text("Configurar aparência") }
-        Button(onClick = onLogout) { Text("Sair") }
+        Button(onClick = {}, shape = MaterialTheme.shapes.small) { Text("Configurar aparência") }
+        Button(onClick = onLogout, shape = MaterialTheme.shapes.small) { Text("Sair") }
     }
 }
 

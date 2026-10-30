@@ -11,7 +11,13 @@ import br.com.fiap.fides.data.local.entity.SignatureFieldEntity
 
 @Dao
 interface DocumentDao {
-    @Query("SELECT * FROM documents WHERE ownerId = :userId ORDER BY updatedAtEpochMillis DESC")
+    @Query("""
+        SELECT DISTINCT d.*
+        FROM documents d
+        LEFT JOIN document_signers ds ON ds.documentId = d.id
+        WHERE d.ownerId = :userId OR ds.signerId = :userId
+        ORDER BY d.updatedAtEpochMillis DESC
+    """)
     suspend fun getAllForUser(userId: String): List<DocumentEntity>
 
     @Query("SELECT * FROM documents WHERE id = :id")
@@ -23,8 +29,14 @@ interface DocumentDao {
     @Query("SELECT * FROM document_signers WHERE documentId = :documentId")
     suspend fun getSigners(documentId: String): List<DocumentSignerEntity>
 
+    @Query("SELECT * FROM document_signers WHERE documentId = :documentId AND signerId = :signerId")
+    suspend fun getSigner(documentId: String, signerId: String): DocumentSignerEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveSigners(signers: List<DocumentSignerEntity>)
+
+    @Query("UPDATE document_signers SET signedAtEpochMillis = :signedAt WHERE documentId = :documentId AND signerId = :signerId")
+    suspend fun markSignerSigned(documentId: String, signerId: String, signedAt: Long)
 
     @Query("DELETE FROM document_signers WHERE documentId = :documentId")
     suspend fun deleteSigners(documentId: String)
@@ -40,6 +52,9 @@ interface DocumentDao {
 
     @Query("DELETE FROM documents WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("UPDATE documents SET status = :status, updatedAtEpochMillis = :updatedAt WHERE id = :id")
+    suspend fun updateStatus(id: String, status: String, updatedAt: Long)
 
     @Delete
     suspend fun delete(document: DocumentEntity)
