@@ -17,8 +17,7 @@ Demonstrar o fluxo local de preparação, envio, assinatura e acompanhamento de 
 
 ## Roteiro de demonstração
 
-- Administrador: `victor@fides.local` / `fides1234`.
-- Signatário de demonstração: `ana.teste@fides.local` / `fides1234`.
+- Usar as contas fictícias exibidas na tela de login do aplicativo.
 - Usar somente dados fictícios e um PDF de teste não sensível.
 - Evidenciar que o documento original permanece preservado.
 
