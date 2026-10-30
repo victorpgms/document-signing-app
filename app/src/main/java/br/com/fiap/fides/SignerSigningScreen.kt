@@ -6,6 +6,8 @@ import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Paint
 import android.graphics.Path as AndroidPath
 import android.graphics.Color as AndroidColor
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -41,6 +43,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import br.com.fiap.fides.core.pdf.PdfExportService
+import br.com.fiap.fides.core.pdf.PdfSignatureService
 import br.com.fiap.fides.data.local.FidesDatabase
 import br.com.fiap.fides.data.repository.LocalDocumentRepository
 import br.com.fiap.fides.domain.model.Document
@@ -66,13 +70,28 @@ internal fun SignerSigningScreen(
     var document by remember { mutableStateOf<Document?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var signedFilePath by remember { mutableStateOf<String?>(null) }
+    var exportMessage by remember { mutableStateOf<String?>(null) }
     val strokes = remember { mutableStateListOf<List<Offset>>() }
     var currentStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var drawingSize by remember { mutableStateOf(IntSize.Zero) }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { destination ->
+        val sourcePath = signedFilePath ?: return@rememberLauncherForActivityResult
+        if (destination == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            busy = true
+            exportMessage = runCatching {
+                PdfExportService(context).exportTo(sourcePath, destination)
+                "PDF assinado exportado com sucesso."
+            }.getOrElse { it.message ?: "Não foi possível exportar o PDF assinado." }
+            busy = false
+        }
+    }
 
     LaunchedEffect(documentId, session?.userId) {
         val loaded = repository.getById(documentId)
         document = loaded
+        signedFilePath = loaded?.signedFilePath
         if (loaded == null || session?.userId == null || loaded.signers.none { it.signerId == session?.userId }) {
             error = "Este documento não está vinculado ao usuário autenticado."
         }
@@ -105,10 +124,18 @@ internal fun SignerSigningScreen(
                 if (refreshed?.signers?.all { !it.required || it.signedAt != null } == true) {
                     CompleteDocumentUseCase(repository)(currentDocument.id, signerId)
                 }
+                val latest = repository.getById(currentDocument.id)
+                    ?: throw IllegalStateException("Documento não encontrado após a assinatura.")
+                val signedFile = File(context.filesDir, "documents/${latest.id}-signed-v${latest.version}.pdf")
+                PdfSignatureService(context).applySignatures(latest, repository.getSignatures(latest.id), signedFile)
+                repository.save(latest.copy(signedFilePath = signedFile.absolutePath))
                 null
             }.getOrElse { it.message ?: "Não foi possível salvar a assinatura." }
             busy = false
-            if (error == null) onFinished()
+            if (error == null) {
+                signedFilePath = repository.getById(currentDocument.id)?.signedFilePath
+                clearDrawing()
+            }
         }
     }
 
@@ -166,6 +193,24 @@ internal fun SignerSigningScreen(
         }
         error?.let { message ->
             item { Text(message, color = MaterialTheme.colorScheme.error) }
+        }
+        signedFilePath?.let {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("PDF assinado salvo", style = MaterialTheme.typography.titleMedium)
+                        Text("A versão original foi preservada e uma nova versão foi gerada.")
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedButton(
+                                onClick = { exportLauncher.launch("${document?.title ?: "documento"}-assinado.pdf") },
+                                enabled = !busy,
+                            ) { Text("Exportar PDF assinado") }
+                            Button(onClick = onFinished, enabled = !busy) { Text("Voltar") }
+                        }
+                        exportMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+                    }
+                }
+            }
         }
         item { Spacer(Modifier.height(12.dp)) }
     }

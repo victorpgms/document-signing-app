@@ -97,6 +97,7 @@ private suspend fun DocumentEntity.toDomain(dao: br.com.fiap.fides.data.local.da
         },
         version = version,
         previousVersionId = previousVersionId,
+        signedFilePath = signedFilePath,
     )
 }
 
@@ -111,6 +112,7 @@ private fun Document.toEntity() = DocumentEntity(
     updatedAtEpochMillis = updatedAt.toEpochMilli(),
     version = version,
     previousVersionId = previousVersionId,
+    signedFilePath = signedFilePath,
 )
 
 private fun DocumentSigner.toEntity() = DocumentSignerEntity(documentId, signerId, role.name, required, signedAt?.toEpochMilli())

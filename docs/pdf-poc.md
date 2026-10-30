@@ -1,16 +1,20 @@
 # POC de PDF
 
-## Decisão
+## Decisao
 
-Na Sprint 1, o aplicativo utiliza `android.graphics.pdf.PdfRenderer`, disponível no Android, para validar arquivos importados e renderizar páginas sem adicionar uma biblioteca nativa externa.
+O aplicativo usa `android.graphics.pdf.PdfRenderer` para validar PDFs importados e renderizar paginas no Android. Para gravar imagens de assinatura no arquivo final, a POC selecionou `com.tom-roush:pdfbox-android:2.0.27.0`.
 
-## Cobertura da POC
+O PDFBox-Android e inicializado no servico de PDF e recebe apenas arquivos privados do aplicativo. A implementacao usa coordenadas normalizadas da interface e converte a origem superior da tela para a origem inferior do PDF.
 
-- Importação: `PdfImportService` copia o URI selecionado para o diretório privado do aplicativo e rejeita arquivos vazios ou inválidos.
-- Leitura: `PdfPageRenderer` abre o arquivo privado, informa a quantidade de páginas, consulta dimensões e renderiza uma página por vez em `Bitmap`.
-- Exportação: `PdfExportService` copia o PDF para o URI fornecido pelo Storage Access Framework sem alterar o arquivo original.
-- Limites: o índice de página é validado antes da abertura e falhas de leitura são propagadas como erro recuperável.
+## Cobertura
 
-## Próxima integração
+- `PdfImportService` copia o URI selecionado para o armazenamento privado e rejeita arquivo vazio, invalido ou corrompido.
+- `PdfPageRenderer` informa paginas, dimensoes e renderiza uma pagina por vez.
+- O editor persiste campos vinculados ao signatario, permite mover dentro dos limites e excluir enquanto o documento e rascunho.
+- `PdfSignatureService` aplica cada imagem capturada no campo correspondente e salva uma nova versao assinada, preservando o PDF original.
+- `PdfExportService` envia a versao assinada para um URI escolhido pelo usuario sem modificar o arquivo privado.
 
-LS-025 pode usar `PdfPageRenderer` para navegação multipágina. O editor de campos da LS-026 deve converter posições da tela para coordenadas normalizadas e persistir esses campos no documento.
+## Limites conhecidos
+
+- A POC considera a orientacao visual normal da pagina. PDFs com rotacao especifica devem ser validados em um teste dedicado.
+- O armazenamento continua local nesta Sprint 1; a futura implementacao remota deve respeitar os contratos de repositorio existentes.

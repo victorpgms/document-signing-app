@@ -6,7 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,8 +58,10 @@ import br.com.fiap.fides.domain.model.SignerRole
 import br.com.fiap.fides.domain.repository.SessionRepository
 import br.com.fiap.fides.domain.usecase.AddSignatureFieldUseCase
 import br.com.fiap.fides.domain.usecase.CreateDocumentDraftUseCase
+import br.com.fiap.fides.domain.usecase.DeleteSignatureFieldUseCase
 import br.com.fiap.fides.domain.usecase.DocumentReview
 import br.com.fiap.fides.domain.usecase.DocumentValidationException
+import br.com.fiap.fides.domain.usecase.MoveSignatureFieldUseCase
 import br.com.fiap.fides.domain.usecase.ReviewDocumentUseCase
 import br.com.fiap.fides.domain.usecase.SendDocumentUseCase
 import kotlinx.coroutines.launch
@@ -157,6 +159,28 @@ internal fun DocumentFlowScreen(
         }
     }
 
+    fun moveField(field: br.com.fiap.fides.domain.model.SignatureField, x: Float, y: Float) {
+        val id = documentId ?: return
+        scope.launch {
+            busy = true
+            runCatching { MoveSignatureFieldUseCase(documentRepository)(id, field.id, x, y, field.width, field.height) }
+                .onSuccess { fields = it.signatureFields; message = null }
+                .onFailure { message = it.message ?: "Não foi possível mover o campo." }
+            busy = false
+        }
+    }
+
+    fun deleteField(fieldId: String) {
+        val id = documentId ?: return
+        scope.launch {
+            busy = true
+            runCatching { DeleteSignatureFieldUseCase(documentRepository)(id, fieldId) }
+                .onSuccess { fields = fields.filterNot { it.id == fieldId }; message = "Campo excluído." }
+                .onFailure { message = it.message ?: "Não foi possível excluir o campo." }
+            busy = false
+        }
+    }
+
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         Text("Novo documento", style = MaterialTheme.typography.headlineLarge)
         Text("Etapa $step de 4", color = MaterialTheme.colorScheme.primary)
@@ -184,6 +208,8 @@ internal fun DocumentFlowScreen(
                 busy = busy,
                 onPageChange = { selectedPageIndex = it },
                 onAddAt = ::addFieldAt,
+                onMove = ::moveField,
+                onDelete = ::deleteField,
             )
             4 -> ReviewStep(review, busy) {
                 val id = documentId ?: return@ReviewStep
@@ -273,8 +299,14 @@ private fun FieldStep(
     busy: Boolean,
     onPageChange: (Int) -> Unit,
     onAddAt: (Float, Float) -> Unit,
+    onMove: (br.com.fiap.fides.domain.model.SignatureField, Float, Float) -> Unit,
+    onDelete: (String) -> Unit,
 ) {
     var pageSize by remember { mutableStateOf(IntSize.Zero) }
+    var activeFieldId by remember { mutableStateOf<String?>(null) }
+    var activeX by remember { mutableStateOf(0f) }
+    var activeY by remember { mutableStateOf(0f) }
+    var didDrag by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Campos de assinatura", style = MaterialTheme.typography.titleLarge)
         Text("Toque no PDF para posicionar um campo. O retângulo permanece dentro da página.")
@@ -290,12 +322,46 @@ private fun FieldStep(
                     .aspectRatio(page.width.toFloat() / page.height.toFloat())
                     .background(Color.LightGray)
                     .onSizeChanged { pageSize = it }
-                    .pointerInput(pageIndex, page) {
-                        detectTapGestures { offset ->
-                            if (!busy && pageSize.width > 0 && pageSize.height > 0) {
-                                onAddAt(offset.x / pageSize.width, offset.y / pageSize.height)
-                            }
-                        }
+                    .pointerInput(pageIndex, page, fields, busy) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                if (busy || pageSize.width <= 0 || pageSize.height <= 0) return@detectDragGestures
+                                val normalizedX = offset.x / pageSize.width
+                                val normalizedY = offset.y / pageSize.height
+                                val hit = fields.lastOrNull { field ->
+                                    field.pageIndex == pageIndex &&
+                                        normalizedX in field.x..(field.x + field.width) &&
+                                        normalizedY in field.y..(field.y + field.height)
+                                }
+                                activeFieldId = hit?.id
+                                activeX = hit?.x ?: normalizedX
+                                activeY = hit?.y ?: normalizedY
+                                didDrag = false
+                            },
+                            onDrag = { change, amount ->
+                                if (activeFieldId != null && pageSize.width > 0 && pageSize.height > 0) {
+                                    change.consume()
+                                    val field = fields.firstOrNull { it.id == activeFieldId } ?: return@detectDragGestures
+                                    activeX = (activeX + amount.x / pageSize.width).coerceIn(0f, 1f - field.width)
+                                    activeY = (activeY + amount.y / pageSize.height).coerceIn(0f, 1f - field.height)
+                                    didDrag = true
+                                }
+                            },
+                            onDragEnd = {
+                                val field = fields.firstOrNull { it.id == activeFieldId }
+                                if (field != null && didDrag) {
+                                    onMove(field, activeX, activeY)
+                                } else if (field == null && !busy && pageSize.width > 0 && pageSize.height > 0) {
+                                    onAddAt(activeX, activeY)
+                                }
+                                activeFieldId = null
+                                didDrag = false
+                            },
+                            onDragCancel = {
+                                activeFieldId = null
+                                didDrag = false
+                            },
+                        )
                     },
             ) {
                 Image(page.asImageBitmap(), contentDescription = "Página ${pageIndex + 1} do PDF", modifier = Modifier.fillMaxSize())
@@ -317,7 +383,12 @@ private fun FieldStep(
             }
         } ?: Text("Carregando página do PDF...", color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedButton(onClick = { onAddAt(.08f, .78f) }, enabled = !busy) { Text("Adicionar no centro inferior") }
-        fields.forEach { field -> Text("Campo ${field.id.take(8)} · página ${field.pageIndex + 1} · ${field.width} × ${field.height}") }
+        fields.forEach { field ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Campo ${field.id.take(8)} - página ${field.pageIndex + 1} - ${field.width} x ${field.height}")
+                OutlinedButton(onClick = { onDelete(field.id) }, enabled = !busy) { Text("Excluir") }
+            }
+        }
     }
 }
 

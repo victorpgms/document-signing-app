@@ -15,4 +15,5 @@ data class DocumentEntity(
     val updatedAtEpochMillis: Long,
     val version: Int = 1,
     val previousVersionId: String? = null,
+    val signedFilePath: String? = null,
 )

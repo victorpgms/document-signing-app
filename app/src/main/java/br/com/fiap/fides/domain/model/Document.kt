@@ -15,4 +15,5 @@ data class Document(
     val signatureFields: List<SignatureField> = emptyList(),
     val version: Int = 1,
     val previousVersionId: String? = null,
+    val signedFilePath: String? = null,
 )
