@@ -62,6 +62,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.pdfbox.android)
     ksp(libs.androidx.room.compiler)
 
     testImplementation(libs.junit)

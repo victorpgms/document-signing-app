@@ -96,14 +96,17 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                     Text("Signatarios", style = MaterialTheme.typography.headlineLarge)
                     Text("${signers.size} pessoas cadastradas", color = MaterialTheme.colorScheme.primary)
                 }
-                Button(onClick = { if (showForm) clearForm() else showForm = true }) {
+                Button(onClick = { if (showForm) clearForm() else showForm = true }, shape = MaterialTheme.shapes.small) {
                     Text(if (showForm) "Cancelar" else "Adicionar")
                 }
             }
         }
         if (showForm) {
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(name, { name = it; error = null }, Modifier.fillMaxWidth(), label = { Text("Nome completo") })
                         OutlinedTextField(email, { email = it; error = null }, Modifier.fillMaxWidth(), label = { Text("E-mail") }, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Email))
@@ -135,7 +138,7 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                                         .onFailure { error = "Nao foi possivel salvar o signatario." }
                                 }
                             }
-                        }) { Text("Salvar signatario") }
+                        }, shape = MaterialTheme.shapes.small) { Text("Salvar signatario") }
                     }
                 }
             }

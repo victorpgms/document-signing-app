@@ -15,6 +15,9 @@ interface SignerDao {
     @Query("SELECT * FROM signers WHERE id = :id")
     suspend fun getById(id: String): SignerEntity?
 
+    @Query("SELECT * FROM signers WHERE email = :email LIMIT 1")
+    suspend fun getByEmail(email: String): SignerEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun save(signer: SignerEntity)
 

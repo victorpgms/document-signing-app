@@ -35,3 +35,48 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         db.execSQL("ALTER TABLE signers ADD COLUMN passwordHash TEXT NOT NULL DEFAULT ''")
     }
 }
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS document_events (
+                id TEXT NOT NULL,
+                documentId TEXT NOT NULL,
+                actorId TEXT NOT NULL,
+                type TEXT NOT NULL,
+                occurredAtEpochMillis INTEGER NOT NULL,
+                details TEXT,
+                PRIMARY KEY(id)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_document_events_documentId ON document_events(documentId)")
+    }
+}
+
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE document_signers ADD COLUMN signedAtEpochMillis INTEGER DEFAULT NULL")
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS signature_records (
+                id TEXT NOT NULL,
+                documentId TEXT NOT NULL,
+                signerId TEXT NOT NULL,
+                fieldId TEXT NOT NULL,
+                localFilePath TEXT NOT NULL,
+                createdAtEpochMillis INTEGER NOT NULL,
+                PRIMARY KEY(id)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_signature_records_documentId ON signature_records(documentId)")
+    }
+}
+
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE documents ADD COLUMN signedFilePath TEXT DEFAULT NULL")
+    }
+}

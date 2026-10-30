@@ -2,7 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:allowBackup="true"
+        android:icon="@drawable/fides_app_icon"
         android:label="@string/app_name"
+        android:roundIcon="@drawable/fides_app_icon"
         android:supportsRtl="true"
         android:theme="@style/Theme.Fides">
         <activity
