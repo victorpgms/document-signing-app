@@ -38,8 +38,10 @@ data class PdfSignerSummary(
 
 /** Writes captured signature images to a new PDF version and never overwrites the imported original. */
 class PdfSignatureService(context: Context) {
+    private val appContext = context.applicationContext
+
     init {
-        PDFBoxResourceLoader.init(context.applicationContext)
+        PDFBoxResourceLoader.init(appContext)
     }
 
     suspend fun applySignatures(
@@ -112,7 +114,7 @@ class PdfSignatureService(context: Context) {
                     }
                 }
                 if (includeSummary && !validationToken.isNullOrBlank()) {
-                    appendSignatureSummary(pdf, document, signerSummaries, validationToken)
+                    appendSignatureSummaryStyled(pdf, document, signerSummaries, validationToken)
                 }
                 pdf.save(temporaryFile)
             }
@@ -133,7 +135,7 @@ class PdfSignatureService(context: Context) {
         }
     }
 
-    private fun appendSignatureSummary(
+    private fun appendSignatureSummaryLegacy(
         pdf: PDDocument,
         document: Document,
         signers: List<PdfSignerSummary>,
@@ -196,6 +198,113 @@ class PdfSignatureService(context: Context) {
         }
     }
 
+    private fun appendSignatureSummaryStyled(
+        pdf: PDDocument,
+        document: Document,
+        signers: List<PdfSignerSummary>,
+        validationToken: String,
+    ) {
+        val chunks = signers.ifEmpty {
+            listOf(PdfSignerSummary("Nenhum participante", "", "", "", null, null))
+        }.chunked(4)
+
+        chunks.forEachIndexed { index, chunk ->
+            val page = PDPage(PDRectangle.A4)
+            pdf.addPage(page)
+            PDPageContentStream(pdf, page).use { stream ->
+                val width = page.mediaBox.width
+                val height = page.mediaBox.height
+                val contentWidth = width - 72f
+
+                stream.setNonStrokingColor(248, 250, 252)
+                stream.addRect(0f, 0f, width, height)
+                stream.fill()
+
+                stream.setNonStrokingColor(63, 5, 190)
+                stream.addRect(0f, height - 92f, width, 92f)
+                stream.fill()
+                stream.setNonStrokingColor(220, 153, 14)
+                stream.addRect(0f, height - 98f, width, 6f)
+                stream.fill()
+
+                BitmapFactory.decodeResource(appContext.resources, br.com.fiap.fides.R.drawable.fides_logo_dark)?.let { logo ->
+                    try {
+                        stream.drawImage(LosslessFactory.createFromImage(pdf, logo), 36f, height - 64f, 116f, 30f)
+                    } finally {
+                        logo.recycle()
+                    }
+                }
+                writeText(stream, 174f, height - 47f, "Comprovante de assinaturas", 13f, bold = true, color = intArrayOf(255, 255, 255))
+
+                val documentBottom = height - 220f
+                stream.setNonStrokingColor(255, 255, 255)
+                stream.addRect(36f, documentBottom, contentWidth, 100f)
+                stream.fill()
+                stream.setStrokingColor(226, 232, 240)
+                stream.addRect(36f, documentBottom, contentWidth, 100f)
+                stream.stroke()
+                stream.setNonStrokingColor(220, 153, 14)
+                stream.addRect(36f, documentBottom, 5f, 100f)
+                stream.fill()
+
+                writeText(stream, 54f, height - 146f, "Documento", 9f, bold = true, color = intArrayOf(100, 116, 139))
+                writeText(stream, 54f, height - 164f, safe(document.title), 13f, bold = true, color = intArrayOf(17, 24, 39))
+                writeText(stream, 54f, height - 183f, "Arquivo: ${safe(document.originalFileName)}", 9f)
+                writeText(stream, 54f, height - 201f, "Codigo de validacao: ${safe(validationToken)}", 8f, bold = true, color = intArrayOf(63, 5, 190))
+
+                val qr = createQrBitmap("fides://validar/$validationToken")
+                try {
+                    stream.drawImage(LosslessFactory.createFromImage(pdf, qr), width - 126f, height - 206f, 78f, 78f)
+                } finally {
+                    qr.recycle()
+                }
+
+                var cardTop = height - 240f
+                val cardHeight = 78f
+                chunk.forEach { signer ->
+                    val cardBottom = cardTop - cardHeight
+                    stream.setNonStrokingColor(255, 255, 255)
+                    stream.addRect(36f, cardBottom, contentWidth, cardHeight)
+                    stream.fill()
+                    stream.setStrokingColor(226, 232, 240)
+                    stream.addRect(36f, cardBottom, contentWidth, cardHeight)
+                    stream.stroke()
+                    stream.setNonStrokingColor(220, 153, 14)
+                    stream.addRect(36f, cardBottom, 4f, cardHeight)
+                    stream.fill()
+
+                    writeText(stream, 52f, cardTop - 20f, safe(signer.fullName), 11f, bold = true, color = intArrayOf(17, 24, 39))
+                    writeText(stream, 52f, cardTop - 37f, "E-mail: ${safeOrDash(signer.email)}", 8f)
+                    writeText(stream, 52f, cardTop - 51f, "Telefone: ${safeOrDash(signer.phone)}", 8f)
+                    writeText(stream, 52f, cardTop - 65f, "Papel: ${safeOrDash(signer.role)}", 8f)
+                    val status = if (signer.signedAtEpochMillis == null) {
+                        "Pendente"
+                    } else {
+                        "Assinado em ${formatInstant(signer.signedAtEpochMillis)}"
+                    }
+                    writeText(stream, 360f, cardTop - 20f, "Status: ${safe(status).take(30)}", 8f, bold = true, color = intArrayOf(63, 5, 190))
+
+                    val signaturePath = signer.signatureFilePath
+                    if (!signaturePath.isNullOrBlank()) {
+                        BitmapFactory.decodeFile(signaturePath)?.let { bitmap ->
+                            try {
+                                stream.drawImage(LosslessFactory.createFromImage(pdf, bitmap), width - 150f, cardBottom + 10f, 105f, 34f)
+                            } finally {
+                                bitmap.recycle()
+                            }
+                        }
+                    } else {
+                        writeText(stream, width - 150f, cardBottom + 24f, "Sem assinatura", 8f, color = intArrayOf(100, 116, 139))
+                    }
+                    cardTop = cardBottom - 10f
+                }
+
+                writeText(stream, 36f, 32f, "Resumo adicionado pelo Fides. O conteudo original foi preservado.", 8f, color = intArrayOf(100, 116, 139))
+                writeText(stream, width - 72f, 32f, "${index + 1}/${chunks.size}", 8f, color = intArrayOf(100, 116, 139))
+            }
+        }
+    }
+
     private fun writeText(
         stream: PDPageContentStream,
         x: Float,
@@ -213,7 +322,7 @@ class PdfSignatureService(context: Context) {
         stream.endText()
     }
 
-    private fun safeOrDash(value: String): String = if (value.isBlank()) "Não informado" else value
+    private fun safeOrDash(value: String): String = if (value.isBlank()) "Nao informado" else value
 
     private fun safe(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFD)
         .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
