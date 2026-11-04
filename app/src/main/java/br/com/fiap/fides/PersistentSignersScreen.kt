@@ -3,6 +3,7 @@ package br.com.fiap.fides
 import android.util.Patterns
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -33,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import br.com.fiap.fides.core.security.PasswordHasher
 import br.com.fiap.fides.domain.model.Signer
@@ -65,7 +65,6 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var feedback by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedSignerId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -88,7 +87,6 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
         name = ""
         email = ""
         phone = ""
-        password = ""
         error = null
     }
 
@@ -127,7 +125,6 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                         OutlinedTextField(name, { name = it; error = null }, Modifier.fillMaxWidth(), label = { Text("Nome completo") })
                         OutlinedTextField(email, { email = it; error = null }, Modifier.fillMaxWidth(), label = { Text("E-mail") }, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Email))
                         OutlinedTextField(phone, { phone = it; error = null }, Modifier.fillMaxWidth(), label = { Text("Telefone") })
-                        OutlinedTextField(password, { password = it; error = null }, Modifier.fillMaxWidth(), label = { Text(if (editingId == null) "Senha" else "Nova senha (opcional)") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Password))
                         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         Button(onClick = {
                             val current = signers.firstOrNull { it.id == editingId }
@@ -135,26 +132,29 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                                 name.isBlank() -> "Informe o nome completo."
                                 !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> "Informe um e-mail válido."
                                 phone.isBlank() -> "Informe o telefone."
-                                password.isNotBlank() && password.length < 6 -> "A senha deve ter pelo menos 6 caracteres."
                                 signers.any { it.email.equals(email.trim(), true) && it.id != editingId } -> "Este e-mail já está cadastrado."
                                 else -> null
                             }
                             if (error == null) {
-                                val generatedPassword = if (editingId == null && password.isBlank()) generateTemporaryPassword() else password
+                                val generatedPassword = if (editingId == null) generateTemporaryPassword() else ""
                                 val signer = Signer(
                                     id = editingId ?: UUID.randomUUID().toString(),
                                     fullName = name.trim(),
                                     email = email.trim().lowercase(),
                                     active = current?.active ?: true,
                                     phone = phone.trim(),
-                                    passwordHash = if (generatedPassword.isBlank()) current?.passwordHash.orEmpty() else PasswordHasher().hash(generatedPassword.toCharArray()),
+                                    passwordHash = if (editingId == null) {
+                                        PasswordHasher().hash(generatedPassword.toCharArray())
+                                    } else {
+                                        current?.passwordHash.orEmpty()
+                                    },
                                 )
                                 scope.launch {
                                     runCatching { repository.save(signer) }
                                         .onSuccess {
                                             if (editingId == null) {
                                                 shareSignerAccess(context, signer, generatedPassword)
-                                                feedback = "Signatário cadastrado. O convite foi aberto para compartilhamento."
+                                                feedback = "Signatário cadastrado. O convite foi preparado no aplicativo de e-mail."
                                             }
                                             clearForm()
                                             reload()
@@ -181,7 +181,6 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                     name = signer.fullName
                     email = signer.email
                     phone = signer.phone
-                    password = ""
                     error = null
                     showForm = true
                     }
@@ -254,12 +253,12 @@ private fun shareSignerAccess(context: Context, signer: Signer, temporaryPasswor
     val message = "Fides\n\nOlá, ${signer.fullName}. Você recebeu uma solicitação de assinatura.\n\nAcesse o aplicativo Fides com:\nE-mail: ${signer.email}\nSenha temporária: $temporaryPassword\n\nAltere a senha após o primeiro acesso."
     context.startActivity(
         Intent.createChooser(
-            Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
+            Intent(Intent.ACTION_SENDTO).apply {
+                data = Uri.parse("mailto:${Uri.encode(signer.email)}")
                 putExtra(Intent.EXTRA_SUBJECT, "Convite para assinar no Fides")
                 putExtra(Intent.EXTRA_TEXT, message)
             },
-            "Compartilhar convite",
+            "Enviar convite por e-mail",
         ),
     )
 }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -192,7 +194,8 @@ private fun FidesApp(
                                             FidesRoute.PROFILE -> "◉"
                                             else -> "•"
                                         },
-                                        style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.size(32.dp),
+                                        style = MaterialTheme.typography.headlineSmall.copy(fontSize = 28.sp),
                                     )
                                 },
                                 label = { Text(item.label) },
