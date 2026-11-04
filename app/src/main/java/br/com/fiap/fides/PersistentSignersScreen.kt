@@ -3,7 +3,6 @@ package br.com.fiap.fides
 import android.util.Patterns
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -67,6 +66,8 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
     var phone by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var feedback by rememberSaveable { mutableStateOf<String?>(null) }
+    var inviteSigner by remember { mutableStateOf<Signer?>(null) }
+    var invitePassword by remember { mutableStateOf("") }
     var selectedSignerId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingDelete by remember { mutableStateOf<Signer?>(null) }
 
@@ -115,6 +116,34 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
             }
             feedback?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
+        inviteSigner?.let { signer ->
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f)),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Acesso criado", style = MaterialTheme.typography.titleMedium)
+                        Text("Compartilhe as instruções com ${signer.fullName}.")
+                        Text("A senha temporária será exibida somente nesta mensagem de compartilhamento.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { shareSignerAccess(context, signer, invitePassword) },
+                                shape = MaterialTheme.shapes.small,
+                            ) {
+                                Text("Compartilhar acesso")
+                            }
+                            TextButton(onClick = {
+                                inviteSigner = null
+                                invitePassword = ""
+                            }) {
+                                Text("Fechar")
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if (showForm) {
             item {
                 Card(
@@ -153,8 +182,9 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                                     runCatching { repository.save(signer) }
                                         .onSuccess {
                                             if (editingId == null) {
-                                                shareSignerAccess(context, signer, generatedPassword)
-                                                feedback = "Signatário cadastrado. O convite foi preparado no aplicativo de e-mail."
+                                                inviteSigner = signer
+                                                invitePassword = generatedPassword
+                                                feedback = "Signatário cadastrado. Compartilhe as instruções de acesso."
                                             }
                                             clearForm()
                                             reload()
@@ -253,12 +283,12 @@ private fun shareSignerAccess(context: Context, signer: Signer, temporaryPasswor
     val message = "Fides\n\nOlá, ${signer.fullName}. Você recebeu uma solicitação de assinatura.\n\nAcesse o aplicativo Fides com:\nE-mail: ${signer.email}\nSenha temporária: $temporaryPassword\n\nAltere a senha após o primeiro acesso."
     context.startActivity(
         Intent.createChooser(
-            Intent(Intent.ACTION_SENDTO).apply {
-                data = Uri.parse("mailto:${Uri.encode(signer.email)}")
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
                 putExtra(Intent.EXTRA_SUBJECT, "Convite para assinar no Fides")
                 putExtra(Intent.EXTRA_TEXT, message)
             },
-            "Enviar convite por e-mail",
+            "Compartilhar acesso",
         ),
     )
 }
