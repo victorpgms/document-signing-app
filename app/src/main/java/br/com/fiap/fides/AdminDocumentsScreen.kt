@@ -265,7 +265,7 @@ private fun AdminDocumentCard(
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Progresso de assinaturas", style = MaterialTheme.typography.bodySmall)
-                Text("$signedCount de $requiredCount", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                Text("$signedCount de $requiredCount", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
             }
             LinearProgressIndicator(
                 progress = { progress },
@@ -277,7 +277,7 @@ private fun AdminDocumentCard(
                     TextButton(onClick = onDeleteDraft) { Text("Excluir rascunho") }
                 }
                 if (document.status == DocumentStatus.SENT || document.status == DocumentStatus.PARTIALLY_SIGNED) {
-                    TextButton(onClick = onCancel) { Text("Cancelar solicitação") }
+                    TextButton(onClick = onCancel) { Text("Cancelar solicitação", color = MaterialTheme.colorScheme.tertiary) }
                 }
             }
         }

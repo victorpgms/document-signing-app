@@ -2,10 +2,13 @@ package br.com.fiap.fides
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -54,6 +57,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -159,6 +163,28 @@ private fun FidesApp(
         listOf(FidesRoute.DOCUMENTS, FidesRoute.SIGNER_DASHBOARD, FidesRoute.SIGNERS, FidesRoute.PROFILE)
     }
     val showBottomBar = currentDestination?.route in navigationItems.map { it.route }
+    val activity = LocalActivity.current
+    val homeRoute = if (currentRole == UserRole.SIGNER) {
+        FidesRoute.SIGNER_DASHBOARD.route
+    } else {
+        FidesRoute.DOCUMENTS.route
+    }
+
+    BackHandler(enabled = currentDestination?.route != FidesRoute.LOGIN.route) {
+        if (currentRole == null) {
+            navController.popBackStack(FidesRoute.LOGIN.route, inclusive = false)
+        } else if (currentDestination?.route == homeRoute) {
+            activity?.finish()
+        } else {
+            selectedSignerDocumentId = null
+            selectedAdminDocumentId = null
+            selectedDraftDocumentId = null
+            navController.navigate(homeRoute) {
+                popUpTo(homeRoute) { inclusive = false }
+                launchSingleTop = true
+            }
+        }
+    }
 
     FidesTheme(
         darkTheme = when (themeMode) {
@@ -186,23 +212,29 @@ private fun FidesApp(
                                     }
                                 },
                                 icon = {
-                                    Text(
-                                        when (item) {
-                                            FidesRoute.DOCUMENTS -> "▤"
-                                            FidesRoute.SIGNER_DASHBOARD -> "✓"
-                                            FidesRoute.SIGNERS -> "♙"
-                                            FidesRoute.PROFILE -> "◉"
-                                            else -> "•"
-                                        },
-                                        modifier = Modifier.size(32.dp),
-                                        style = MaterialTheme.typography.headlineSmall.copy(fontSize = 28.sp),
-                                    )
+                                    Box(
+                                        modifier = Modifier.size(40.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            when (item) {
+                                                FidesRoute.DOCUMENTS -> "▤"
+                                                FidesRoute.SIGNER_DASHBOARD -> "✓"
+                                                FidesRoute.SIGNERS -> "♙"
+                                                FidesRoute.PROFILE -> "◉"
+                                                else -> "•"
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textAlign = TextAlign.Center,
+                                            style = MaterialTheme.typography.headlineSmall.copy(fontSize = 28.sp),
+                                        )
+                                    }
                                 },
                                 label = { Text(item.label) },
                                 colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                    selectedIconColor = MaterialTheme.colorScheme.tertiary,
+                                    selectedTextColor = MaterialTheme.colorScheme.tertiary,
+                                    indicatorColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f),
                                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 ),
@@ -774,6 +806,7 @@ private fun ProfileScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {

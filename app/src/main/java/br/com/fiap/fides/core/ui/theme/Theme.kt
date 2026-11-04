@@ -27,10 +27,10 @@ private val FidesLightColorScheme = lightColorScheme(
 )
 
 private val FidesDarkColorScheme = darkColorScheme(
-    primary = BrandPurple,
-    onPrimary = LightSurface,
-    secondary = BrandBlue,
-    onSecondary = LightSurface,
+    primary = BrandGold,
+    onPrimary = DarkBackground,
+    secondary = DarkBrandBlue,
+    onSecondary = DarkBackground,
     tertiary = BrandGold,
     background = DarkBackground,
     onBackground = DarkOnBackground,
@@ -38,7 +38,7 @@ private val FidesDarkColorScheme = darkColorScheme(
     onSurface = DarkOnBackground,
     surfaceVariant = DarkSurfaceElevated,
     onSurfaceVariant = DarkOnSurfaceVariant,
-    outline = DarkFieldSurface,
+    outline = DarkOutline,
     error = Error,
 )
 

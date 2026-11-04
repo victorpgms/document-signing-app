@@ -108,7 +108,7 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Signatários", style = MaterialTheme.typography.headlineLarge)
-                    Text("${signers.size} pessoas cadastradas", color = MaterialTheme.colorScheme.primary)
+                    Text("${signers.size} pessoas cadastradas", color = MaterialTheme.colorScheme.tertiary)
                 }
                 Button(onClick = { if (showForm) clearForm() else showForm = true }, shape = MaterialTheme.shapes.small) {
                     Text(if (showForm) "Cancelar" else "Adicionar")
@@ -205,6 +205,22 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                 signer = signer,
                 selected = selectedSignerId == signer.id,
                 onSelect = { selectedSignerId = signer.id },
+                onShare = {
+                    if (signer.accountRole != br.com.fiap.fides.domain.model.UserRole.ADMIN) {
+                        val temporaryPassword = generateTemporaryPassword()
+                        val updatedSigner = signer.copy(
+                            passwordHash = PasswordHasher().hash(temporaryPassword.toCharArray()),
+                        )
+                        scope.launch {
+                            runCatching { repository.save(updatedSigner) }
+                                .onSuccess {
+                                    shareSignerAccess(context, updatedSigner, temporaryPassword)
+                                    feedback = "Nova senha temporária preparada para compartilhamento."
+                                }
+                                .onFailure { feedback = "Não foi possível preparar o acesso." }
+                        }
+                    }
+                },
                 onEdit = {
                     if (signer.accountRole != br.com.fiap.fides.domain.model.UserRole.ADMIN) {
                     editingId = signer.id
@@ -245,6 +261,7 @@ private fun PersistentSignerCard(
     signer: Signer,
     selected: Boolean,
     onSelect: () -> Unit,
+    onShare: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -260,12 +277,15 @@ private fun PersistentSignerCard(
                     Text("Administrador elegível para assinatura", color = MaterialTheme.colorScheme.primary)
                 }
                 if (selected) {
-                    Text("Selecionado", color = MaterialTheme.colorScheme.primary)
+                    Text("Selecionado", color = MaterialTheme.colorScheme.tertiary)
                 }
                 if (signer.accountRole != br.com.fiap.fides.domain.model.UserRole.ADMIN) {
-                    Row {
-                        TextButton(onClick = onEdit) { Text("Editar") }
-                        TextButton(onClick = onDelete) { Text("Excluir") }
+                    Column {
+                        TextButton(onClick = onShare) { Text("Compartilhar acesso") }
+                        Row {
+                            TextButton(onClick = onEdit) { Text("Editar") }
+                            TextButton(onClick = onDelete) { Text("Excluir") }
+                        }
                     }
                 }
             }
