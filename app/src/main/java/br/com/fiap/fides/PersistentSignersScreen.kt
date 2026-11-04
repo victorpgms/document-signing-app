@@ -46,8 +46,9 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
             modifier = Modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            FidesHeader()
             Text("Acesso restrito", style = MaterialTheme.typography.headlineLarge)
-            Text("A gestao de signatarios esta disponivel somente para Administradores.")
+            Text("A gestão de signatários está disponível somente para administradores.")
         }
         return
     }
@@ -62,11 +63,19 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
     var phone by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
+    var feedback by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedSignerId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingDelete by remember { mutableStateOf<Signer?>(null) }
 
     fun reload() {
-        scope.launch { signers = runCatching { repository.getAll() }.getOrDefault(emptyList()) }
+        scope.launch {
+            runCatching { repository.getAll() }
+                .onSuccess {
+                    signers = it
+                    feedback = null
+                }
+                .onFailure { feedback = "Não foi possível carregar os signatários." }
+        }
     }
 
     fun clearForm() {
@@ -91,15 +100,18 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
+            FidesHeader()
+            Spacer(Modifier.size(18.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Signatarios", style = MaterialTheme.typography.headlineLarge)
+                    Text("Signatários", style = MaterialTheme.typography.headlineLarge)
                     Text("${signers.size} pessoas cadastradas", color = MaterialTheme.colorScheme.primary)
                 }
                 Button(onClick = { if (showForm) clearForm() else showForm = true }, shape = MaterialTheme.shapes.small) {
                     Text(if (showForm) "Cancelar" else "Adicionar")
                 }
             }
+            feedback?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
         if (showForm) {
             item {
@@ -117,10 +129,10 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                             val current = signers.firstOrNull { it.id == editingId }
                             error = when {
                                 name.isBlank() -> "Informe o nome completo."
-                                !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> "Informe um e-mail valido."
+                                !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> "Informe um e-mail válido."
                                 phone.isBlank() -> "Informe o telefone."
                                 editingId == null && password.length < 6 -> "A senha deve ter pelo menos 6 caracteres."
-                                signers.any { it.email.equals(email.trim(), true) && it.id != editingId } -> "Este e-mail ja esta cadastrado."
+                                signers.any { it.email.equals(email.trim(), true) && it.id != editingId } -> "Este e-mail já está cadastrado."
                                 else -> null
                             }
                             if (error == null) {
@@ -134,11 +146,14 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                                 )
                                 scope.launch {
                                     runCatching { repository.save(signer) }
-                                        .onSuccess { reload(); clearForm() }
-                                        .onFailure { error = "Nao foi possivel salvar o signatario." }
+                                        .onSuccess {
+                                            clearForm()
+                                            reload()
+                                        }
+                                        .onFailure { error = "Não foi possível salvar o signatário." }
                                 }
                             }
-                        }, shape = MaterialTheme.shapes.small) { Text("Salvar signatario") }
+                        }, shape = MaterialTheme.shapes.small) { Text("Salvar signatário") }
                     }
                 }
             }
@@ -168,12 +183,16 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
     pendingDelete?.let { signer ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("Excluir signatario?") },
-            text = { Text("${signer.fullName} nao podera ser usado em novos documentos.") },
+            title = { Text("Excluir signatário?") },
+            text = { Text("${signer.fullName} não poderá ser usado em novos documentos.") },
             confirmButton = {
                 TextButton(onClick = {
                     pendingDelete = null
-                    scope.launch { runCatching { repository.delete(signer.id) }; reload() }
+                    scope.launch {
+                        runCatching { repository.delete(signer.id) }
+                            .onSuccess { reload() }
+                            .onFailure { feedback = "Não foi possível excluir o signatário." }
+                    }
                 }) { Text("Excluir") }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancelar") } },

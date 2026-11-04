@@ -19,7 +19,26 @@ A aplicação permitirá que administradores configurem documentos e solicitaç�
 
 ## Tecnologias
 
-A definir conforme a arquitetura e a plataforma selecionadas pelo grupo.
+- Kotlin e Android nativo
+- Jetpack Compose e Material 3
+- Room e DataStore
+- Coroutines
+- Android `PdfRenderer`
+- PDFBox-Android para geração do PDF assinado
+- JUnit e testes instrumentados Android
+
+## Execução local
+
+1. Abra o projeto no Android Studio.
+2. Aguarde a sincronização do Gradle.
+3. Execute em um emulador ou aparelho com Android 8.0 (API 26) ou superior.
+
+Contas fictícias:
+
+- Administrador: `victor@fides.local` / `fides1234`
+- Signatários: `ana.teste@fides.local` ou `bruno.teste@fides.local` / `fides1234`
+
+O aplicativo funciona localmente na Sprint 1. PDFs e registros são mantidos no armazenamento privado do aplicativo, e a exportação usa o seletor de documentos do Android.
 
 ## Organização do desenvolvimento
 

@@ -13,7 +13,8 @@ Demonstrar o fluxo local de preparação, envio, assinatura e acompanhamento de 
 5. **Revisão e envio** — conferir participante, papel, campos e status antes do envio local.
 6. **Acesso do signatário** — entrar com o e-mail cadastrado e abrir apenas o documento recebido.
 7. **Assinatura e acompanhamento** — desenhar a assinatura, confirmar e apresentar os eventos/status.
-8. **Próximas evoluções** — aplicar a assinatura visual no PDF, exportar o PDF final e concluir os testes ponta a ponta.
+8. **PDF final** — abrir o documento concluído, conferir o histórico e exportar uma cópia pelo seletor Android.
+9. **Próximas evoluções** — integração com backend e notificações remotas na Sprint 2.
 
 ## Roteiro de demonstração
 
@@ -27,4 +28,6 @@ Demonstrar o fluxo local de preparação, envio, assinatura e acompanhamento de 
 - Captura do campo posicionado na página.
 - Captura do login do signatário.
 - Captura da tela de assinatura e do status atualizado.
+- Captura do histórico e do PDF final concluído.
+- Evidência da exportação pelo seletor Android.
 - APK gerado a partir do commit apresentado.

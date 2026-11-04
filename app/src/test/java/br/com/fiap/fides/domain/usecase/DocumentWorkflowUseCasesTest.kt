@@ -5,10 +5,13 @@ import br.com.fiap.fides.domain.model.DocumentEvent
 import br.com.fiap.fides.domain.model.DocumentStatus
 import br.com.fiap.fides.domain.model.DocumentSigner
 import br.com.fiap.fides.domain.model.SignerRole
+import br.com.fiap.fides.domain.model.SignatureField
 import br.com.fiap.fides.domain.model.SignatureRecord
 import br.com.fiap.fides.domain.repository.DocumentRepository
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.time.Instant
@@ -55,6 +58,38 @@ class DocumentWorkflowUseCasesTest {
             assertEquals(DocumentStatus.SENT, second.status)
             assertEquals(1, repository.sentEvents)
         }
+    }
+
+    @Test
+    fun `new version preserves original and resets signing state`() = runBlocking {
+        val repository = FakeDocumentRepository()
+        repository.document = Document(
+            id = "sent-document",
+            ownerId = "admin",
+            title = "Contrato",
+            originalFileName = "contrato.pdf",
+            localFilePath = "/private/contrato.pdf",
+            status = DocumentStatus.COMPLETED,
+            createdAt = Instant.EPOCH,
+            updatedAt = Instant.EPOCH,
+            signers = listOf(DocumentSigner("sent-document", "signer", SignerRole.CONTRACTOR, signedAt = Instant.EPOCH)),
+            signatureFields = listOf(SignatureField("field", "sent-document", "signer", 0, .1f, .1f, .3f, .1f)),
+            version = 2,
+            signedFilePath = "/private/signed.pdf",
+        )
+
+        val version = CreateNewDocumentVersionUseCase(repository)("sent-document", "admin")
+
+        assertEquals(DocumentStatus.DRAFT, version.status)
+        assertEquals(3, version.version)
+        assertEquals("sent-document", version.previousVersionId)
+        assertEquals("/private/contrato.pdf", version.localFilePath)
+        assertNull(version.signedFilePath)
+        assertNull(version.signers.single().signedAt)
+        assertNotEquals("sent-document", version.id)
+        assertEquals(version.id, version.signers.single().documentId)
+        assertEquals(version.id, version.signatureFields.single().documentId)
+        assertNotEquals("field", version.signatureFields.single().id)
     }
 }
 

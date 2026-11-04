@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
+import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
 import com.tom_roush.pdfbox.pdmodel.graphics.image.LosslessFactory
 import br.com.fiap.fides.domain.model.Document
 import br.com.fiap.fides.domain.model.SignatureRecord
@@ -25,6 +26,7 @@ class PdfSignatureService(context: Context) {
         document: Document,
         signatures: List<SignatureRecord>,
         outputFile: File,
+        signerLabels: Map<String, String> = emptyMap(),
     ): File = withContext(Dispatchers.IO) {
         val sourceFile = File(document.localFilePath)
         if (!sourceFile.isFile) throw PdfSignatureException("O PDF original não foi encontrado.")
@@ -48,6 +50,8 @@ class PdfSignatureService(context: Context) {
                         val pageHeight = page.mediaBox.height
                         val x = field.x * pageWidth
                         val y = pageHeight - ((field.y + field.height) * pageHeight)
+                        val fieldWidth = field.width * pageWidth
+                        val fieldHeight = field.height * pageHeight
                         PDPageContentStream(
                             pdf,
                             page,
@@ -59,9 +63,26 @@ class PdfSignatureService(context: Context) {
                                 image,
                                 x,
                                 y,
-                                field.width * pageWidth,
-                                field.height * pageHeight,
+                                fieldWidth,
+                                fieldHeight,
                             )
+                            signerLabels[field.signerId]?.takeIf { it.isNotBlank() }?.let { label ->
+                                val labelHeight = minOf(14f, fieldHeight * .28f).coerceAtLeast(9f)
+                                val fontSize = minOf(8f, labelHeight * .62f)
+                                val safeLabel = label
+                                    .replace('—', '-')
+                                    .filter { it.code in 32..255 }
+                                    .take((fieldWidth / (fontSize * .52f)).toInt().coerceAtLeast(1))
+                                stream.setNonStrokingColor(255, 255, 255)
+                                stream.addRect(x, y, fieldWidth, labelHeight)
+                                stream.fill()
+                                stream.beginText()
+                                stream.setNonStrokingColor(50, 16, 135)
+                                stream.setFont(PDType1Font.HELVETICA_BOLD, fontSize)
+                                stream.newLineAtOffset(x + 3f, y + (labelHeight - fontSize) / 2f)
+                                stream.showText(safeLabel)
+                                stream.endText()
+                            }
                         }
                     } finally {
                         bitmap.recycle()

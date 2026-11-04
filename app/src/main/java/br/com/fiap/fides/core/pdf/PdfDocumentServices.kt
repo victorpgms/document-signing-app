@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import androidx.core.graphics.createBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -28,7 +29,7 @@ class PdfPageRenderer {
         openRenderer(filePath).use { renderer ->
             validatePageIndex(pageIndex, renderer.pageCount)
             renderer.openPage(pageIndex).use { page ->
-                Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888).also { bitmap ->
+                createBitmap(page.width, page.height).also { bitmap ->
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                 }
             }

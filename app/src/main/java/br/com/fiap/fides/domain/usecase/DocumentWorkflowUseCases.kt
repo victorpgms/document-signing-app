@@ -65,6 +65,50 @@ class SendDocumentUseCase(
     }
 }
 
+class CreateNewDocumentVersionUseCase(
+    private val repository: DocumentRepository,
+    private val clock: Clock = Clock.systemUTC(),
+) {
+    suspend operator fun invoke(documentId: String, actorId: String): Document {
+        val source = repository.getById(documentId) ?: throw DocumentValidationException("Documento não encontrado.")
+        if (source.status == DocumentStatus.DRAFT) {
+            throw DocumentValidationException("O documento ainda é um rascunho e não precisa de uma nova versão.")
+        }
+        if (actorId.isBlank()) throw DocumentValidationException("O responsável pela nova versão é obrigatório.")
+
+        val now = Instant.now(clock)
+        val newDocumentId = UUID.randomUUID().toString()
+        val version = source.copy(
+            id = newDocumentId,
+            ownerId = actorId,
+            status = DocumentStatus.DRAFT,
+            createdAt = now,
+            updatedAt = now,
+            signers = source.signers.map { signer ->
+                signer.copy(documentId = newDocumentId, signedAt = null)
+            },
+            signatureFields = source.signatureFields.map { field ->
+                field.copy(id = UUID.randomUUID().toString(), documentId = newDocumentId)
+            },
+            version = source.version + 1,
+            previousVersionId = source.id,
+            signedFilePath = null,
+        )
+        repository.save(version)
+        repository.recordEvent(
+            DocumentEvent(
+                id = UUID.randomUUID().toString(),
+                documentId = version.id,
+                actorId = actorId,
+                type = DocumentEventType.CREATED,
+                occurredAt = now,
+                details = "Nova versão criada a partir da versão ${source.version}.",
+            ),
+        )
+        return version
+    }
+}
+
 class TrackDocumentsUseCase(private val repository: DocumentRepository) {
     suspend operator fun invoke(userId: String): List<Document> = repository.getAllForUser(userId)
 }
