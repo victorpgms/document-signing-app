@@ -34,6 +34,9 @@ import br.com.fiap.fides.domain.model.Document
 import com.google.zxing.integration.android.IntentIntegrator
 import kotlinx.coroutines.launch
 import java.io.File
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 internal fun DocumentValidationScreen(
@@ -194,7 +197,15 @@ private suspend fun validate(
     val signerDetails = signerRepository.getAll().associateBy { it.id }
     val signers = document.signers.map { participant ->
         val signer = signerDetails[participant.signerId]
-        (signer?.fullName ?: participant.signerId) to if (participant.signedAt == null) "Pendente · ${participant.role.name}" else "Assinado · ${participant.role.name}"
+        val whenSigned = participant.signedAt?.atZone(ZoneId.systemDefault())?.format(
+            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm z", Locale.forLanguageTag("pt-BR")),
+        )
+        val status = if (whenSigned == null) "Pendente" else "Assinado em $whenSigned"
+        val contact = listOfNotNull(
+            signer?.email?.takeIf { it.isNotBlank() },
+            signer?.phone?.takeIf { it.isNotBlank() },
+        ).joinToString(" · ").ifBlank { "Contato não informado" }
+        (signer?.fullName ?: participant.signerId) to "$contact · ${participant.role.name} · $status"
     }
     if (document.status == br.com.fiap.fides.domain.model.DocumentStatus.CANCELLED) {
         return ValidationResult(false, "Documento cancelado.", document, signers, "Não aplicável")
