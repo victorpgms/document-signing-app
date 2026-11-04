@@ -9,6 +9,19 @@ data class AuthenticatedUser(
     val role: UserRole,
 )
 
+data class RegistrationResult(
+    val user: AuthenticatedUser? = null,
+    val error: String? = null,
+)
+
 interface AuthRepository {
     suspend fun authenticate(email: String, password: CharArray): AuthenticatedUser?
+
+    suspend fun register(
+        displayName: String,
+        email: String,
+        password: CharArray,
+        role: UserRole,
+        phone: String = "",
+    ): RegistrationResult
 }

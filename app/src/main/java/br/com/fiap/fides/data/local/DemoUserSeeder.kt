@@ -7,8 +7,10 @@ import br.com.fiap.fides.data.local.dao.SignerDao
 import java.util.UUID
 
 object DemoUserSeeder {
-    const val EMAIL = "victor@fides.local"
+    const val EMAIL = "admin.victor@fides.local"
     const val PASSWORD = "fides1234"
+    const val SECOND_ADMIN_EMAIL = "admin.lucas@fides.local"
+    const val SECOND_ADMIN_PASSWORD = "fides1234"
     const val SIGNER_EMAIL = "ana.teste@fides.local"
     const val SIGNER_PASSWORD = "fides1234"
     const val SECOND_SIGNER_EMAIL = "bruno.teste@fides.local"
@@ -16,26 +18,32 @@ object DemoUserSeeder {
 
     suspend fun ensure(database: FidesDatabase) {
         val dao = database.userDao()
-        val existingAdmin = dao.getByEmail(EMAIL)
-        val adminUser = existingAdmin ?: UserEntity(
-                    id = UUID.randomUUID().toString(),
-                    email = EMAIL,
-                    displayName = "Victor Almeida",
-                    passwordHash = PasswordHasher().hash(PASSWORD.toCharArray()),
-                    role = "ADMIN",
-                    active = true,
-                ).also { dao.insert(it) }
+        ensureAdmin(dao, EMAIL, "Victor Almeida", PASSWORD)
+        ensureAdmin(dao, SECOND_ADMIN_EMAIL, "Lucas", SECOND_ADMIN_PASSWORD)
         val signerDao = database.signerDao()
-        ensureSigner(
-            signerDao = signerDao,
-            fullName = "Victor Almeida",
-            email = EMAIL,
-            password = PASSWORD,
-            phone = "(11) 98888-8888",
-            preferredId = adminUser.id,
-        )
         ensureSigner(signerDao, "Ana Teste", SIGNER_EMAIL, SIGNER_PASSWORD, "(11) 90000-0000")
         ensureSigner(signerDao, "Bruno Teste", SECOND_SIGNER_EMAIL, SECOND_SIGNER_PASSWORD, "(11) 91111-1111")
+    }
+
+    private suspend fun ensureAdmin(
+        dao: br.com.fiap.fides.data.local.dao.UserDao,
+        email: String,
+        displayName: String,
+        password: String,
+    ) {
+        val existing = dao.getByEmail(email)
+        if (existing == null) {
+            dao.insert(
+                UserEntity(
+                    id = UUID.randomUUID().toString(),
+                    email = email,
+                    displayName = displayName,
+                    passwordHash = PasswordHasher().hash(password.toCharArray()),
+                    role = "ADMIN",
+                    active = true,
+                ),
+            )
+        }
     }
 
     private suspend fun ensureSigner(

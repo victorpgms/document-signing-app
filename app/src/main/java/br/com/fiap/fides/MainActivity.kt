@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -30,6 +31,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -86,6 +88,7 @@ import java.util.UUID
 
 private enum class FidesRoute(val route: String, val label: String) {
     LOGIN("login", "Login"),
+    REGISTER("register", "Criar conta"),
     DOCUMENTS("documents", "Documentos"),
     SIGNER_DASHBOARD("signer-dashboard", "Pendências"),
     SIGNERS("signers", "Signatários"),
@@ -213,7 +216,26 @@ private fun FidesApp(
                     LoginScreen(
                         authRepository = authRepository,
                         enabled = accountReady,
+                        onOpenRegistration = { navController.navigate(FidesRoute.REGISTER.route) },
                         onLoginSuccess = {
+                            sessionRepository.save(it)
+                            currentRole = it.role
+                            val destination = if (it.role == UserRole.SIGNER) {
+                                FidesRoute.SIGNER_DASHBOARD.route
+                            } else {
+                                FidesRoute.DOCUMENTS.route
+                            }
+                            navController.navigate(destination) {
+                                popUpTo(FidesRoute.LOGIN.route) { inclusive = true }
+                            }
+                        },
+                    )
+                }
+                composable(FidesRoute.REGISTER.route) {
+                    RegistrationScreen(
+                        authRepository = authRepository,
+                        onBack = { navController.popBackStack() },
+                        onRegistrationSuccess = {
                             sessionRepository.save(it)
                             currentRole = it.role
                             val destination = if (it.role == UserRole.SIGNER) {
@@ -338,6 +360,7 @@ private fun FidesApp(
 private fun LoginScreen(
     authRepository: AuthRepository,
     enabled: Boolean,
+    onOpenRegistration: () -> Unit,
     onLoginSuccess: suspend (AuthenticatedUser) -> Unit,
 ) {
     var email by rememberSaveable { mutableStateOf("") }
@@ -439,14 +462,170 @@ private fun LoginScreen(
                 ) {
                     Text(if (authenticating) "Entrando..." else "Entrar  →")
                 }
+                TextButton(
+                    onClick = onOpenRegistration,
+                    enabled = !authenticating,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Criar uma conta")
+                }
             }
         }
         Text(
-            "Admin: victor@fides.local / fides1234\nSignatários: ana.teste@fides.local ou bruno.teste@fides.local / fides1234",
+            "Admins: admin.victor@fides.local ou admin.lucas@fides.local / fides1234\nSignatários: ana.teste@fides.local ou bruno.teste@fides.local / fides1234",
             modifier = Modifier.padding(top = 18.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun RegistrationScreen(
+    authRepository: AuthRepository,
+    onBack: () -> Unit,
+    onRegistrationSuccess: suspend (AuthenticatedUser) -> Unit,
+) {
+    var displayName by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var phone by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var confirmation by rememberSaveable { mutableStateOf("") }
+    var role by rememberSaveable { mutableStateOf(UserRole.SIGNER) }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
+    var registering by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+
+    fun submitRegistration() {
+        if (registering || displayName.isBlank() || email.isBlank() || password.isBlank()) return
+        if (password != confirmation) {
+            error = "As senhas precisam ser iguais."
+            return
+        }
+        val submittedPassword = password.toCharArray()
+        focusManager.clearFocus()
+        registering = true
+        error = null
+        scope.launch {
+            try {
+                val result = withContext(Dispatchers.Default) {
+                    authRepository.register(displayName, email, submittedPassword, role, phone)
+                }
+                if (result.user == null) {
+                    error = result.error ?: "Não foi possível criar a conta."
+                } else {
+                    onRegistrationSuccess(result.user)
+                }
+            } catch (exception: Exception) {
+                error = exception.message ?: "Não foi possível criar a conta."
+            } finally {
+                submittedPassword.fill('\u0000')
+                registering = false
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        FidesHeader()
+        Spacer(Modifier.height(24.dp))
+        Text("Criar conta", style = MaterialTheme.typography.headlineLarge)
+        Text(
+            "Cadastre um acesso local para a demonstração.",
+            modifier = Modifier.padding(top = 6.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        ) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Tipo de acesso", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = role == UserRole.SIGNER,
+                        onClick = { role = UserRole.SIGNER },
+                        label = { Text("Signatário") },
+                    )
+                    FilterChip(
+                        selected = role == UserRole.ADMIN,
+                        onClick = { role = UserRole.ADMIN },
+                        label = { Text("Administrador") },
+                    )
+                }
+                OutlinedTextField(
+                    value = displayName,
+                    onValueChange = { displayName = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !registering,
+                    singleLine = true,
+                    label = { Text("Nome completo") },
+                )
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !registering,
+                    singleLine = true,
+                    label = { Text("E-mail") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Next,
+                    ),
+                )
+                if (role == UserRole.SIGNER) {
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !registering,
+                        singleLine = true,
+                        label = { Text("Telefone (opcional)") },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    )
+                }
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !registering,
+                    singleLine = true,
+                    label = { Text("Senha") },
+                    visualTransformation = PasswordVisualTransformation(),
+                )
+                OutlinedTextField(
+                    value = confirmation,
+                    onValueChange = { confirmation = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !registering,
+                    singleLine = true,
+                    label = { Text("Confirmar senha") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardActions = KeyboardActions(onDone = { submitRegistration() }),
+                )
+                if (error != null) {
+                    Text(error!!, color = MaterialTheme.colorScheme.error)
+                }
+                Button(
+                    onClick = ::submitRegistration,
+                    enabled = !registering && displayName.isNotBlank() && email.isNotBlank() && password.isNotBlank() && confirmation.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (registering) "Criando..." else "Criar conta")
+                }
+                TextButton(onClick = onBack, enabled = !registering, modifier = Modifier.fillMaxWidth()) {
+                    Text("Voltar para o login")
+                }
+            }
+        }
     }
 }
 

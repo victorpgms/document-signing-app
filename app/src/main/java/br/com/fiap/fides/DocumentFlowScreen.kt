@@ -418,14 +418,14 @@ private fun SignerSelectionStep(
                     }
                     if (signer.id in selected) {
                         Text("Papel no documento", style = MaterialTheme.typography.labelLarge)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             SignerRole.entries.forEach { item ->
                                 OutlinedButton(
                                     onClick = { onRole(signer.id, item.name) },
                                     shape = MaterialTheme.shapes.small,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.fillMaxWidth(),
                                 ) {
-                                    Text(if (roles[signer.id] == item.name) "✓ ${item.label()}" else item.label(), maxLines = 1)
+                                    Text(if (roles[signer.id] == item.name) "✓ ${item.label()}" else item.label())
                                 }
                             }
                         }
