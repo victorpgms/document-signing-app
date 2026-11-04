@@ -110,12 +110,15 @@ Tecnologias principais:
 
 ## Equipe
 
-Integrantes identificados no repositório e no histórico de desenvolvimento:
+Integrantes informados no material compartilhado do projeto:
 
-- Victor — mantenedor do repositório e responsável pela integração.
-- Lucas (`lucasgiovani97`) — colaborador responsável pelo PR do fluxo local de assinatura.
+- Alberto da Silva Lima
+- Lucas Giovani de Oliveira (`lucasgiovani97`)
+- Victor Pedro Gomes Martins Silva
+- Guilherme Santana Paes
+- Simara Santos Silva
 
-Não foram adicionados outros nomes sem confirmação no repositório ou na planilha.
+As funções individuais podem ser detalhadas na planilha conforme a divisão de tarefas. O README não publica e-mails pessoais; os acessos de demonstração usam apenas endereços fictícios locais.
 
 ## Git e colaboração
 
