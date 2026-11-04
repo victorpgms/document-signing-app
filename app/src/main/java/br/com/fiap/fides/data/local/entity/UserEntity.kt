@@ -15,4 +15,5 @@ data class UserEntity(
     val passwordHash: String,
     val role: String,
     val active: Boolean,
+    val phone: String = "",
 )

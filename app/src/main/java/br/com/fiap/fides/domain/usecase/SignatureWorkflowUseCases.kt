@@ -97,6 +97,9 @@ class CaptureSignatureUseCase(
     suspend operator fun invoke(documentId: String, signerId: String, fieldId: String, localFilePath: String): SignatureRecord {
         if (localFilePath.isBlank()) throw DocumentValidationException("A assinatura capturada é obrigatória.")
         val document = repository.getById(documentId) ?: throw DocumentValidationException("Documento não encontrado.")
+        if (document.status == DocumentStatus.CANCELLED) {
+            throw DocumentValidationException("Esta solicitação foi cancelada e não aceita novas assinaturas.")
+        }
         if (document.status !in setOf(DocumentStatus.SENT, DocumentStatus.PARTIALLY_SIGNED)) throw DocumentValidationException("O documento não está disponível para assinatura.")
         val signer = document.signers.firstOrNull { it.signerId == signerId }
             ?: throw DocumentValidationException("O usuário não participa deste documento.")
@@ -115,6 +118,9 @@ class ApplySignatureUseCase(
 ) {
     suspend operator fun invoke(documentId: String, signerId: String): Document {
         val document = repository.getById(documentId) ?: throw DocumentValidationException("Documento não encontrado.")
+        if (document.status == DocumentStatus.CANCELLED) {
+            throw DocumentValidationException("Esta solicitação foi cancelada e não pode ser concluída.")
+        }
         val signer = document.signers.firstOrNull { it.signerId == signerId }
             ?: throw DocumentValidationException("O usuário não participa deste documento.")
         val signerFields = document.signatureFields.filter { it.signerId == signerId && it.required }

@@ -7,6 +7,7 @@ data class AuthenticatedUser(
     val email: String,
     val displayName: String,
     val role: UserRole,
+    val phone: String = "",
 )
 
 data class RegistrationResult(
@@ -24,4 +25,15 @@ interface AuthRepository {
         role: UserRole,
         phone: String = "",
     ): RegistrationResult
+
+    suspend fun getProfile(userId: String): AuthenticatedUser?
+
+    suspend fun updateProfile(
+        userId: String,
+        displayName: String,
+        email: String,
+        phone: String,
+    ): RegistrationResult
+
+    suspend fun updatePassword(userId: String, currentPassword: CharArray, newPassword: CharArray): String?
 }

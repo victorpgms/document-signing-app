@@ -91,17 +91,58 @@ class DocumentWorkflowUseCasesTest {
         assertEquals(version.id, version.signatureFields.single().documentId)
         assertNotEquals("field", version.signatureFields.single().id)
     }
+
+    @Test
+    fun `only owner can delete draft`() = runBlocking {
+        val repository = FakeDocumentRepository().apply {
+            document = Document("draft", "admin", "Rascunho", "a.pdf", "/a.pdf", DocumentStatus.DRAFT, Instant.EPOCH, Instant.EPOCH)
+        }
+
+        assertThrows(DocumentValidationException::class.java) {
+            runBlocking { DeleteDraftUseCase(repository)("draft", "other-admin") }
+        }
+        DeleteDraftUseCase(repository)("draft", "admin")
+        assertEquals(null, repository.document)
+    }
+
+    @Test
+    fun `cancel changes pending request and preserves cancellation event`() = runBlocking {
+        val repository = FakeDocumentRepository().apply {
+            document = Document(
+                "sent",
+                "admin",
+                "Contrato",
+                "a.pdf",
+                "/a.pdf",
+                DocumentStatus.SENT,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                listOf(DocumentSigner("sent", "signer", SignerRole.CONTRACTOR)),
+            )
+        }
+
+        val cancelled = CancelDocumentUseCase(repository)("sent", "admin")
+
+        assertEquals(DocumentStatus.CANCELLED, cancelled.status)
+        assertEquals(DocumentStatus.CANCELLED, repository.document?.status)
+        assertEquals(1, repository.cancelledEvents)
+    }
 }
 
 private class FakeDocumentRepository : DocumentRepository {
     var document: Document? = null
     var sentEvents = 0
+    var cancelledEvents = 0
     override suspend fun getAllForUser(userId: String) = listOfNotNull(document)
     override suspend fun getById(id: String) = document
+    override suspend fun getByValidationToken(token: String) = document?.takeIf { it.validationToken == token }
     override suspend fun save(document: Document) { this.document = document }
-    override suspend fun delete(id: String) = Unit
+    override suspend fun delete(id: String) { document = null }
     override suspend fun updateStatus(id: String, status: DocumentStatus, updatedAt: Instant) { document = document?.copy(status = status, updatedAt = updatedAt) }
-    override suspend fun recordEvent(event: DocumentEvent) { if (event.type.name == "SENT") sentEvents += 1 }
+    override suspend fun recordEvent(event: DocumentEvent) {
+        if (event.type.name == "SENT") sentEvents += 1
+        if (event.type.name == "CANCELLED") cancelledEvents += 1
+    }
     override suspend fun getEvents(documentId: String) = emptyList<DocumentEvent>()
     override suspend fun markSignerSigned(documentId: String, signerId: String, signedAt: Instant) = Unit
     override suspend fun saveSignature(record: SignatureRecord) = Unit

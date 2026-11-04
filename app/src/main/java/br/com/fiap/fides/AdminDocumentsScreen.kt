@@ -18,17 +18,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,6 +44,9 @@ import br.com.fiap.fides.data.repository.LocalSignerRepository
 import br.com.fiap.fides.domain.model.Document
 import br.com.fiap.fides.domain.model.DocumentStatus
 import br.com.fiap.fides.domain.repository.SessionRepository
+import br.com.fiap.fides.domain.usecase.CancelDocumentUseCase
+import br.com.fiap.fides.domain.usecase.DeleteDraftUseCase
+import kotlinx.coroutines.launch
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -60,20 +66,23 @@ internal fun AdminDocumentsScreen(
 ) {
     val session by sessionRepository.session.collectAsState(initial = null)
     val documentRepository = remember(database) { LocalDocumentRepository(database) }
-    val signerRepository = remember(database) { LocalSignerRepository(database.signerDao()) }
+    val signerRepository = remember(database) { LocalSignerRepository(database.signerDao(), database.userDao()) }
     var documents by remember { mutableStateOf(emptyList<Document>()) }
     var signerNames by remember { mutableStateOf(emptyMap<String, String>()) }
     var search by rememberSaveable { mutableStateOf("") }
     var selectedFilter by rememberSaveable { mutableStateOf(AdminDocumentFilter.ALL) }
     var loading by remember { mutableStateOf(true) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    var pendingAction by remember { mutableStateOf<DocumentAction?>(null) }
+    var actionError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(session?.userId) {
         val userId = session?.userId ?: return@LaunchedEffect
         loading = true
         runCatching {
             val loadedDocuments = documentRepository.getAllForUser(userId)
-            val loadedSigners = signerRepository.getAll().associate { it.id to it.fullName }
+            val loadedSigners = signerRepository.getAll().associate { it.id to "${it.fullName} · ${it.email}" }
             loadedDocuments to loadedSigners
         }.onSuccess { (loadedDocuments, loadedSigners) ->
             documents = loadedDocuments
@@ -172,14 +181,68 @@ internal fun AdminDocumentsScreen(
                     document = document,
                     participantNames = document.signers.mapNotNull { signerNames[it.signerId] },
                     onClick = { onOpenDocument(document.id) },
+                    onDeleteDraft = { pendingAction = DocumentAction.DeleteDraft(document) },
+                    onCancel = { pendingAction = DocumentAction.Cancel(document) },
                 )
             }
         }
     }
+
+    pendingAction?.let { action ->
+        val document = action.document
+        val isDelete = action is DocumentAction.DeleteDraft
+        AlertDialog(
+            onDismissRequest = { pendingAction = null },
+            title = { Text(if (isDelete) "Excluir rascunho?" else "Cancelar solicitação?") },
+            text = {
+                Text(
+                    if (isDelete) {
+                        "O rascunho \"${document.title}\" será removido e não poderá ser recuperado."
+                    } else {
+                        "O cancelamento impedirá novas assinaturas, mas preservará o registro e o histórico da solicitação."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingAction = null
+                        val actorId = session?.userId ?: return@TextButton
+                        scope.launch {
+                            actionError = runCatching {
+                                if (isDelete) DeleteDraftUseCase(documentRepository)(document.id, actorId)
+                                else CancelDocumentUseCase(documentRepository)(document.id, actorId)
+                                reloadDocuments(documentRepository, signerRepository, actorId) { loaded, names ->
+                                    documents = loaded
+                                    signerNames = names
+                                }
+                                null
+                            }.getOrElse { it.message ?: "Não foi possível concluir a operação." }
+                        }
+                    },
+                ) { Text(if (isDelete) "Excluir" else "Cancelar solicitação") }
+            },
+            dismissButton = { TextButton(onClick = { pendingAction = null }) { Text("Voltar") } },
+        )
+    }
+    actionError?.let { error ->
+        AlertDialog(
+            onDismissRequest = { actionError = null },
+            title = { Text("Não foi possível concluir") },
+            text = { Text(error) },
+            confirmButton = { TextButton(onClick = { actionError = null }) { Text("Fechar") } },
+        )
+    }
 }
 
 @Composable
-private fun AdminDocumentCard(document: Document, participantNames: List<String>, onClick: () -> Unit) {
+private fun AdminDocumentCard(
+    document: Document,
+    participantNames: List<String>,
+    onClick: () -> Unit,
+    onDeleteDraft: () -> Unit,
+    onCancel: () -> Unit,
+) {
     val requiredSigners = document.signers.filter { it.required }
     val signedCount = requiredSigners.count { it.signedAt != null }
     val requiredCount = requiredSigners.size
@@ -209,8 +272,35 @@ private fun AdminDocumentCard(document: Document, participantNames: List<String>
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
             )
             Text(document.status.displayLabel(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                if (document.status == DocumentStatus.DRAFT) {
+                    TextButton(onClick = onDeleteDraft) { Text("Excluir rascunho") }
+                }
+                if (document.status == DocumentStatus.SENT || document.status == DocumentStatus.PARTIALLY_SIGNED) {
+                    TextButton(onClick = onCancel) { Text("Cancelar solicitação") }
+                }
+            }
         }
     }
+}
+
+private sealed interface DocumentAction {
+    val document: Document
+
+    data class DeleteDraft(override val document: Document) : DocumentAction
+    data class Cancel(override val document: Document) : DocumentAction
+}
+
+private suspend fun reloadDocuments(
+    documentRepository: LocalDocumentRepository,
+    signerRepository: LocalSignerRepository,
+    userId: String,
+    onLoaded: (List<Document>, Map<String, String>) -> Unit,
+) {
+    onLoaded(
+        documentRepository.getAllForUser(userId),
+        signerRepository.getAll().associate { it.id to it.fullName },
+    )
 }
 
 internal fun DocumentStatus.displayLabel(): String = when (this) {

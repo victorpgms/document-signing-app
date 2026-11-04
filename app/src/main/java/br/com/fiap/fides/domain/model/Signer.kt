@@ -7,4 +7,5 @@ data class Signer(
     val active: Boolean = true,
     val phone: String = "",
     val passwordHash: String = "",
+    val accountRole: UserRole = UserRole.SIGNER,
 )

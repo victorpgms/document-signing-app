@@ -87,6 +87,7 @@ private class WorkflowFakeRepository(var document: Document) : DocumentRepositor
     private val records = mutableListOf<SignatureRecord>()
     override suspend fun getAllForUser(userId: String) = listOf(document)
     override suspend fun getById(id: String) = document.takeIf { it.id == id }
+    override suspend fun getByValidationToken(token: String) = document.takeIf { it.validationToken == token }
     override suspend fun save(document: Document) { this.document = document }
     override suspend fun delete(id: String) = Unit
     override suspend fun updateStatus(id: String, status: DocumentStatus, updatedAt: Instant) { document = document.copy(status = status, updatedAt = updatedAt) }

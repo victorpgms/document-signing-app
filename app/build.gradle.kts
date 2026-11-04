@@ -63,6 +63,8 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.pdfbox.android)
+    implementation(libs.zxing.core)
+    implementation(libs.zxing.embedded)
     ksp(libs.androidx.room.compiler)
 
     testImplementation(libs.junit)

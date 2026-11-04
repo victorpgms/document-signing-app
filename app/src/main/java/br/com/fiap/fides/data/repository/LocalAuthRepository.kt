@@ -21,12 +21,12 @@ class LocalAuthRepository(
         userDao.getByEmail(normalizedEmail)?.let { user ->
             if (!user.active || !passwordHasher.verify(password, user.passwordHash)) return null
             val role = runCatching { UserRole.valueOf(user.role) }.getOrNull() ?: return null
-            return AuthenticatedUser(user.id, user.email, user.displayName, role)
+            return AuthenticatedUser(user.id, user.email, user.displayName, role, user.phone)
         }
 
         signerDao.getByEmail(normalizedEmail)?.let { signer ->
             if (!signer.active || signer.passwordHash.isBlank() || !passwordHasher.verify(password, signer.passwordHash)) return null
-            return AuthenticatedUser(signer.id, signer.email, signer.fullName, UserRole.SIGNER)
+            return AuthenticatedUser(signer.id, signer.email, signer.fullName, UserRole.SIGNER, signer.phone)
         }
 
         return null
@@ -61,6 +61,7 @@ class LocalAuthRepository(
                     passwordHash = passwordHash,
                     role = UserRole.ADMIN.name,
                     active = true,
+                    phone = phone.trim(),
                 ),
             )
 
@@ -76,7 +77,56 @@ class LocalAuthRepository(
             )
         }
         return RegistrationResult(
-            user = AuthenticatedUser(id, normalizedEmail, normalizedName, role),
+            user = AuthenticatedUser(id, normalizedEmail, normalizedName, role, phone.trim()),
         )
+    }
+
+    override suspend fun getProfile(userId: String): AuthenticatedUser? {
+        userDao.getById(userId)?.let { user ->
+            val role = runCatching { UserRole.valueOf(user.role) }.getOrNull() ?: return null
+            return AuthenticatedUser(user.id, user.email, user.displayName, role, user.phone)
+        }
+        return signerDao.getById(userId)?.let { signer ->
+            AuthenticatedUser(signer.id, signer.email, signer.fullName, UserRole.SIGNER, signer.phone)
+        }
+    }
+
+    override suspend fun updateProfile(
+        userId: String,
+        displayName: String,
+        email: String,
+        phone: String,
+    ): RegistrationResult {
+        val normalizedName = displayName.trim()
+        val normalizedEmail = email.trim().lowercase()
+        if (normalizedName.isBlank()) return RegistrationResult(error = "Informe o nome completo.")
+        if (!normalizedEmail.contains("@") || normalizedEmail.endsWith("@")) return RegistrationResult(error = "Informe um e-mail válido.")
+        val currentUser = userDao.getActiveAdmins().firstOrNull { it.id == userId }
+        val currentSigner = signerDao.getById(userId)
+        if (currentUser == null && currentSigner == null) return RegistrationResult(error = "Conta não encontrada.")
+        if (userDao.getByEmail(normalizedEmail)?.id != userId || signerDao.getByEmail(normalizedEmail)?.id != userId) {
+            val otherUser = userDao.getByEmail(normalizedEmail)
+            val otherSigner = signerDao.getByEmail(normalizedEmail)
+            if ((otherUser != null && otherUser.id != userId) || (otherSigner != null && otherSigner.id != userId)) {
+                return RegistrationResult(error = "Este e-mail já está cadastrado.")
+            }
+        }
+        if (currentUser != null) {
+            userDao.updateContact(userId, normalizedName, normalizedEmail, phone.trim())
+            return RegistrationResult(AuthenticatedUser(userId, normalizedEmail, normalizedName, UserRole.ADMIN, phone.trim()))
+        }
+        signerDao.updateContact(userId, normalizedName, normalizedEmail, phone.trim())
+        return RegistrationResult(AuthenticatedUser(userId, normalizedEmail, normalizedName, UserRole.SIGNER, phone.trim()))
+    }
+
+    override suspend fun updatePassword(userId: String, currentPassword: CharArray, newPassword: CharArray): String? {
+        if (newPassword.size < 6) return "A nova senha deve ter pelo menos 6 caracteres."
+        val user = userDao.getById(userId)
+        val signer = signerDao.getById(userId)
+        val hash = user?.passwordHash ?: signer?.passwordHash ?: return "Conta não encontrada."
+        if (!passwordHasher.verify(currentPassword, hash)) return "A senha atual está incorreta."
+        val newHash = passwordHasher.hash(newPassword)
+        if (user != null) userDao.updatePassword(userId, newHash) else signerDao.updatePassword(userId, newHash)
+        return null
     }
 }

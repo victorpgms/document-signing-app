@@ -7,6 +7,8 @@ enum class DocumentEventType {
     SENT,
     SIGNED,
     COMPLETED,
+    CANCELLED,
+    DELETED,
 }
 
 data class DocumentEvent(

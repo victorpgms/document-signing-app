@@ -23,6 +23,9 @@ interface DocumentDao {
     @Query("SELECT * FROM documents WHERE id = :id")
     suspend fun getById(id: String): DocumentEntity?
 
+    @Query("SELECT * FROM documents WHERE validationToken = :token LIMIT 1")
+    suspend fun getByValidationToken(token: String): DocumentEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun save(document: DocumentEntity)
 

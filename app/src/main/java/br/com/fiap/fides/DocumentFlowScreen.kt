@@ -86,7 +86,7 @@ internal fun DocumentFlowScreen(
     val scope = rememberCoroutineScope()
     val session by sessionRepository.session.collectAsState(initial = null)
     val documentRepository = remember(database) { LocalDocumentRepository(database) }
-    val signerRepository = remember(database) { LocalSignerRepository(database.signerDao()) }
+    val signerRepository = remember(database) { LocalSignerRepository(database.signerDao(), database.userDao()) }
     val importService = remember(context) { PdfImportService(context) }
     val pageRenderer = remember { PdfPageRenderer() }
     var step by rememberSaveable { mutableStateOf(1) }
@@ -467,20 +467,21 @@ private fun FieldStep(
         Text("Campos de assinatura", style = MaterialTheme.typography.titleLarge)
         Text("Toque no PDF para posicionar um campo. O retângulo permanece dentro da página.")
         Text("Campo para", style = MaterialTheme.typography.labelLarge)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             signers.forEach { signer ->
                 val role = runCatching {
                     SignerRole.valueOf(signerRoles[signer.id] ?: SignerRole.CONTRACTOR.name)
                 }.getOrDefault(SignerRole.CONTRACTOR)
                 OutlinedButton(
                     onClick = { onSelectSigner(signer.id) },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.small,
                 ) {
                     Text(
                         text = "${if (selectedSignerId == signer.id) "✓ " else ""}${signer.fullName}\n${role.label()}",
                         maxLines = 2,
                     )
+                    Text(signer.email, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                 }
             }
         }

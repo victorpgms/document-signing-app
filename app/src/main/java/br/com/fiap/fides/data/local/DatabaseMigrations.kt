@@ -80,3 +80,17 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         db.execSQL("ALTER TABLE documents ADD COLUMN signedFilePath TEXT DEFAULT NULL")
     }
 }
+
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''")
+    }
+}
+
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE documents ADD COLUMN validationToken TEXT DEFAULT NULL")
+        db.execSQL("ALTER TABLE documents ADD COLUMN finalSha256 TEXT DEFAULT NULL")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_documents_validationToken ON documents(validationToken)")
+    }
+}

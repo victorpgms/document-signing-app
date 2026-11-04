@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -88,6 +89,7 @@ import java.util.UUID
 
 private enum class FidesRoute(val route: String, val label: String) {
     LOGIN("login", "Login"),
+    VALIDATE("validate", "Validar documento"),
     REGISTER("register", "Criar conta"),
     DOCUMENTS("documents", "Documentos"),
     SIGNER_DASHBOARD("signer-dashboard", "Pendências"),
@@ -119,7 +121,7 @@ private fun FidesApp(
     val navController = rememberNavController()
     val authRepository = remember { LocalAuthRepository(database.userDao(), database.signerDao()) }
     val signerRepository = remember {
-        AdminOnlySignerRepository(LocalSignerRepository(database.signerDao()), sessionRepository)
+        AdminOnlySignerRepository(LocalSignerRepository(database.signerDao(), database.userDao()), sessionRepository)
     }
     var accountReady by remember { mutableStateOf(false) }
     var currentRole by remember { mutableStateOf<UserRole?>(null) }
@@ -217,6 +219,7 @@ private fun FidesApp(
                         authRepository = authRepository,
                         enabled = accountReady,
                         onOpenRegistration = { navController.navigate(FidesRoute.REGISTER.route) },
+                        onOpenValidation = { navController.navigate(FidesRoute.VALIDATE.route) },
                         onLoginSuccess = {
                             sessionRepository.save(it)
                             currentRole = it.role
@@ -229,6 +232,12 @@ private fun FidesApp(
                                 popUpTo(FidesRoute.LOGIN.route) { inclusive = true }
                             }
                         },
+                    )
+                }
+                composable(FidesRoute.VALIDATE.route) {
+                    DocumentValidationScreen(
+                        database = database,
+                        onBack = { navController.popBackStack() },
                     )
                 }
                 composable(FidesRoute.REGISTER.route) {
@@ -336,6 +345,8 @@ private fun FidesApp(
                 }
                 composable(FidesRoute.PROFILE.route) {
                     ProfileScreen(
+                        authRepository = authRepository,
+                        sessionRepository = sessionRepository,
                         themeMode = themeMode,
                         onThemeModeChange = { selectedMode ->
                             scope.launch { themePreferenceStore.save(selectedMode) }
@@ -361,6 +372,7 @@ private fun LoginScreen(
     authRepository: AuthRepository,
     enabled: Boolean,
     onOpenRegistration: () -> Unit,
+    onOpenValidation: () -> Unit,
     onLoginSuccess: suspend (AuthenticatedUser) -> Unit,
 ) {
     var email by rememberSaveable { mutableStateOf("") }
@@ -468,6 +480,13 @@ private fun LoginScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Criar uma conta")
+                }
+                TextButton(
+                    onClick = onOpenValidation,
+                    enabled = !authenticating,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Validar documento sem login")
                 }
             }
         }
@@ -581,17 +600,15 @@ private fun RegistrationScreen(
                         imeAction = ImeAction.Next,
                     ),
                 )
-                if (role == UserRole.SIGNER) {
-                    OutlinedTextField(
-                        value = phone,
-                        onValueChange = { phone = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !registering,
-                        singleLine = true,
-                        label = { Text("Telefone (opcional)") },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    )
-                }
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { phone = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !registering,
+                    singleLine = true,
+                    label = { Text("Telefone/celular com DDD") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Phone),
+                )
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
@@ -720,15 +737,36 @@ private fun SignerDashboardScreen(
 
 @Composable
 private fun ProfileScreen(
+    authRepository: AuthRepository,
+    sessionRepository: SessionRepository,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     onLogout: () -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val session by sessionRepository.session.collectAsState(initial = null)
+    var displayName by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var phone by rememberSaveable { mutableStateOf("") }
+    var profileMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var profileError by rememberSaveable { mutableStateOf<String?>(null) }
+    var currentPassword by rememberSaveable { mutableStateOf("") }
+    var newPassword by rememberSaveable { mutableStateOf("") }
+    var confirmNewPassword by rememberSaveable { mutableStateOf("") }
+    var savingProfile by remember { mutableStateOf(false) }
     val versionName = remember(context) {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
             .getOrNull()
             ?: "1.0.0"
+    }
+    LaunchedEffect(session?.userId) {
+        val userId = session?.userId ?: return@LaunchedEffect
+        authRepository.getProfile(userId)?.let { profile ->
+            displayName = profile.displayName
+            email = profile.email
+            phone = profile.phone
+        }
     }
     Column(
         modifier = Modifier
@@ -739,6 +777,104 @@ private fun ProfileScreen(
         FidesHeader()
         Text("Perfil", style = MaterialTheme.typography.headlineLarge)
         Text("Preferências da conta e aparência", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedTextField(
+            value = displayName,
+            onValueChange = { displayName = it; profileError = null },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Nome completo") },
+            singleLine = true,
+            enabled = !savingProfile,
+        )
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it; profileError = null },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("E-mail") },
+            singleLine = true,
+            enabled = !savingProfile,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Email),
+        )
+        OutlinedTextField(
+            value = phone,
+            onValueChange = { phone = it; profileError = null },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Telefone/celular com DDD") },
+            singleLine = true,
+            enabled = !savingProfile,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Phone),
+        )
+        Button(
+            onClick = {
+                val userId = session?.userId ?: return@Button
+                scope.launch {
+                    savingProfile = true
+                    profileError = null
+                    val result = authRepository.updateProfile(userId, displayName, email, phone)
+                    result.user?.let {
+                        sessionRepository.save(it)
+                        profileMessage = "Dados de contato atualizados."
+                    }
+                    profileError = result.error
+                    savingProfile = false
+                }
+            },
+            enabled = !savingProfile && displayName.isNotBlank() && email.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.small,
+        ) { Text(if (savingProfile) "Salvando..." else "Salvar dados de contato") }
+        profileMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+        profileError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        Text("Segurança", style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(
+            value = currentPassword,
+            onValueChange = { currentPassword = it; profileError = null },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Senha atual") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            enabled = !savingProfile,
+        )
+        OutlinedTextField(
+            value = newPassword,
+            onValueChange = { newPassword = it; profileError = null },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Nova senha") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            enabled = !savingProfile,
+        )
+        OutlinedTextField(
+            value = confirmNewPassword,
+            onValueChange = { confirmNewPassword = it; profileError = null },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Confirmar nova senha") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            enabled = !savingProfile,
+        )
+        OutlinedButton(
+            onClick = {
+                val userId = session?.userId ?: return@OutlinedButton
+                if (newPassword != confirmNewPassword) {
+                    profileError = "As novas senhas precisam ser iguais."
+                    return@OutlinedButton
+                }
+                scope.launch {
+                    savingProfile = true
+                    val error = authRepository.updatePassword(userId, currentPassword.toCharArray(), newPassword.toCharArray())
+                    profileError = error
+                    if (error == null) {
+                        currentPassword = ""
+                        newPassword = ""
+                        confirmNewPassword = ""
+                        profileMessage = "Senha atualizada com sucesso."
+                    }
+                    savingProfile = false
+                }
+            },
+            enabled = !savingProfile && currentPassword.isNotBlank() && newPassword.isNotBlank() && confirmNewPassword.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Atualizar senha") }
         Text("Aparência", style = MaterialTheme.typography.titleMedium)
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),

@@ -1,6 +1,8 @@
 package br.com.fiap.fides
 
 import android.util.Patterns
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -38,6 +40,7 @@ import br.com.fiap.fides.domain.model.Signer
 import br.com.fiap.fides.domain.repository.SignerRepository
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.security.SecureRandom
 
 @Composable
 internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepository) {
@@ -54,6 +57,7 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
     }
 
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var signers by remember { mutableStateOf(emptyList<Signer>()) }
     var search by rememberSaveable { mutableStateOf("") }
     var showForm by rememberSaveable { mutableStateOf(false) }
@@ -131,22 +135,27 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                                 name.isBlank() -> "Informe o nome completo."
                                 !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> "Informe um e-mail válido."
                                 phone.isBlank() -> "Informe o telefone."
-                                editingId == null && password.length < 6 -> "A senha deve ter pelo menos 6 caracteres."
+                                password.isNotBlank() && password.length < 6 -> "A senha deve ter pelo menos 6 caracteres."
                                 signers.any { it.email.equals(email.trim(), true) && it.id != editingId } -> "Este e-mail já está cadastrado."
                                 else -> null
                             }
                             if (error == null) {
+                                val generatedPassword = if (editingId == null && password.isBlank()) generateTemporaryPassword() else password
                                 val signer = Signer(
                                     id = editingId ?: UUID.randomUUID().toString(),
                                     fullName = name.trim(),
                                     email = email.trim().lowercase(),
                                     active = current?.active ?: true,
                                     phone = phone.trim(),
-                                    passwordHash = if (password.isBlank()) current?.passwordHash.orEmpty() else PasswordHasher().hash(password.toCharArray()),
+                                    passwordHash = if (generatedPassword.isBlank()) current?.passwordHash.orEmpty() else PasswordHasher().hash(generatedPassword.toCharArray()),
                                 )
                                 scope.launch {
                                     runCatching { repository.save(signer) }
                                         .onSuccess {
+                                            if (editingId == null) {
+                                                shareSignerAccess(context, signer, generatedPassword)
+                                                feedback = "Signatário cadastrado. O convite foi aberto para compartilhamento."
+                                            }
                                             clearForm()
                                             reload()
                                         }
@@ -167,6 +176,7 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                 selected = selectedSignerId == signer.id,
                 onSelect = { selectedSignerId = signer.id },
                 onEdit = {
+                    if (signer.accountRole != br.com.fiap.fides.domain.model.UserRole.ADMIN) {
                     editingId = signer.id
                     name = signer.fullName
                     email = signer.email
@@ -174,8 +184,9 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                     password = ""
                     error = null
                     showForm = true
+                    }
                 },
-                onDelete = { pendingDelete = signer },
+                onDelete = { if (signer.accountRole != br.com.fiap.fides.domain.model.UserRole.ADMIN) pendingDelete = signer },
             )
         }
     }
@@ -215,15 +226,40 @@ private fun PersistentSignerCard(
             Column(Modifier.weight(1f)) {
                 Text(signer.fullName, style = MaterialTheme.typography.titleMedium)
                 Text(signer.email, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(signer.phone, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (signer.phone.isBlank()) "Telefone não informado" else signer.phone, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (signer.accountRole == br.com.fiap.fides.domain.model.UserRole.ADMIN) {
+                    Text("Administrador elegível para assinatura", color = MaterialTheme.colorScheme.primary)
+                }
                 if (selected) {
                     Text("Selecionado", color = MaterialTheme.colorScheme.primary)
                 }
-                Row {
-                    TextButton(onClick = onEdit) { Text("Editar") }
-                    TextButton(onClick = onDelete) { Text("Excluir") }
+                if (signer.accountRole != br.com.fiap.fides.domain.model.UserRole.ADMIN) {
+                    Row {
+                        TextButton(onClick = onEdit) { Text("Editar") }
+                        TextButton(onClick = onDelete) { Text("Excluir") }
+                    }
                 }
             }
         }
     }
+}
+
+private fun generateTemporaryPassword(): String {
+    val bytes = ByteArray(12)
+    SecureRandom().nextBytes(bytes)
+    return bytes.joinToString("") { "%02x".format(it) }
+}
+
+private fun shareSignerAccess(context: Context, signer: Signer, temporaryPassword: String) {
+    val message = "Fides\n\nOlá, ${signer.fullName}. Você recebeu uma solicitação de assinatura.\n\nAcesse o aplicativo Fides com:\nE-mail: ${signer.email}\nSenha temporária: $temporaryPassword\n\nAltere a senha após o primeiro acesso."
+    context.startActivity(
+        Intent.createChooser(
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, "Convite para assinar no Fides")
+                putExtra(Intent.EXTRA_TEXT, message)
+            },
+            "Compartilhar convite",
+        ),
+    )
 }
