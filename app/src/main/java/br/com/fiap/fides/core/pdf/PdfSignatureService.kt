@@ -216,25 +216,25 @@ class PdfSignatureService(context: Context) {
                 val height = page.mediaBox.height
                 val contentWidth = width - 72f
 
-                stream.setNonStrokingColor(248, 250, 252)
+                stream.setNonStrokingColor(255, 255, 255)
                 stream.addRect(0f, 0f, width, height)
                 stream.fill()
 
-                stream.setNonStrokingColor(63, 5, 190)
+                stream.setNonStrokingColor(255, 255, 255)
                 stream.addRect(0f, height - 92f, width, 92f)
                 stream.fill()
                 stream.setNonStrokingColor(220, 153, 14)
                 stream.addRect(0f, height - 98f, width, 6f)
                 stream.fill()
 
-                BitmapFactory.decodeResource(appContext.resources, br.com.fiap.fides.R.drawable.fides_logo_dark)?.let { logo ->
+                BitmapFactory.decodeResource(appContext.resources, br.com.fiap.fides.R.drawable.fides_logo_light)?.let { logo ->
                     try {
-                        stream.drawImage(LosslessFactory.createFromImage(pdf, logo), 36f, height - 64f, 116f, 30f)
+                        stream.drawImage(LosslessFactory.createFromImage(pdf, logo), 36f, height - 68f, 116f, 37f)
                     } finally {
                         logo.recycle()
                     }
                 }
-                writeText(stream, 174f, height - 47f, "Comprovante de assinaturas", 13f, bold = true, color = intArrayOf(255, 255, 255))
+                writeText(stream, 174f, height - 47f, "Comprovante de assinaturas", 13f, bold = true, color = intArrayOf(17, 24, 39))
 
                 val documentBottom = height - 220f
                 stream.setNonStrokingColor(255, 255, 255)
