@@ -76,4 +76,35 @@ class LocalSigningWorkflowInstrumentedTest {
         val visibleDocuments = repository.getAllForUser(authenticated.id)
         assertEquals(listOf("linked-document"), visibleDocuments.map { it.id })
     }
+
+    @Test
+    fun localRegistrationCreatesAdminAndSignerAccounts() = runBlocking {
+        DemoUserSeeder.ensure(database)
+        val authRepository = LocalAuthRepository(database.userDao(), database.signerDao())
+
+        val adminRegistration = authRepository.register(
+            displayName = "Novo Admin",
+            email = "novo.admin@fides.local",
+            password = "senha123".toCharArray(),
+            role = UserRole.ADMIN,
+        )
+        val signerRegistration = authRepository.register(
+            displayName = "Novo Signatário",
+            email = "novo.signatario@fides.local",
+            password = "senha123".toCharArray(),
+            role = UserRole.SIGNER,
+            phone = "11999999999",
+        )
+
+        assertEquals(UserRole.ADMIN, adminRegistration.user?.role)
+        assertEquals(UserRole.SIGNER, signerRegistration.user?.role)
+        assertEquals(
+            UserRole.ADMIN,
+            authRepository.authenticate("novo.admin@fides.local", "senha123".toCharArray())?.role,
+        )
+        assertEquals(
+            UserRole.SIGNER,
+            authRepository.authenticate("novo.signatario@fides.local", "senha123".toCharArray())?.role,
+        )
+    }
 }
