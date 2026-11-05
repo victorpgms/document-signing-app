@@ -331,7 +331,7 @@ class PdfSignatureService(context: Context) {
 
     private fun formatInstant(epochMillis: Long): String = java.time.Instant.ofEpochMilli(epochMillis)
         .atZone(ZoneId.systemDefault())
-        .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm z", Locale.forLanguageTag("pt-BR")))
+.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm z", Locale.getDefault()))
 
     private fun createQrBitmap(content: String): Bitmap {
         val matrix = QRCodeWriter().encode(

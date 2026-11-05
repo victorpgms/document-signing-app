@@ -35,7 +35,6 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -69,7 +68,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import br.com.fiap.fides.core.ui.theme.FidesTheme
-import br.com.fiap.fides.data.local.DemoUserSeeder
 import br.com.fiap.fides.data.local.FidesDatabase
 import br.com.fiap.fides.data.local.FidesDatabaseProvider
 import br.com.fiap.fides.data.local.SessionStore
@@ -138,7 +136,6 @@ private fun FidesApp(
     val systemDarkTheme = isSystemInDarkTheme()
     val scope = rememberCoroutineScope()
     LaunchedEffect(database) {
-        withContext(Dispatchers.Default) { DemoUserSeeder.ensure(database) }
         accountReady = true
     }
     LaunchedEffect(accountReady) {
@@ -473,7 +470,7 @@ private fun LoginScreen(
                     enabled = enabled && !authenticating,
                     singleLine = true,
                     label = { Text("E-mail institucional") },
-                    placeholder = { Text("victor@fides.local") },
+                    placeholder = { Text("name@example.com") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                         keyboardType = KeyboardType.Email,
                         imeAction = ImeAction.Next,
@@ -495,9 +492,6 @@ private fun LoginScreen(
                 )
                 if (error != null) {
                     Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-                }
-                if (!enabled) {
-                    Text("Preparando contas de demonstração...", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Button(
                     onClick = ::submitLogin,
@@ -525,12 +519,6 @@ private fun LoginScreen(
                 }
             }
         }
-        Text(
-            "Admins: admin.victor@fides.local ou admin.lucas@fides.local / fides1234\nSignatários: ana.teste@fides.local ou bruno.teste@fides.local / fides1234",
-            modifier = Modifier.padding(top = 18.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -591,7 +579,7 @@ private fun RegistrationScreen(
         Spacer(Modifier.height(24.dp))
         Text("Criar conta", style = MaterialTheme.typography.headlineLarge)
         Text(
-            "Cadastre um acesso local para a demonstração.",
+            "Crie uma conta para acessar o Fides.",
             modifier = Modifier.padding(top = 6.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -16,7 +16,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -198,7 +197,7 @@ private suspend fun validate(
     val signers = document.signers.map { participant ->
         val signer = signerDetails[participant.signerId]
         val whenSigned = participant.signedAt?.atZone(ZoneId.systemDefault())?.format(
-            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm z", Locale.forLanguageTag("pt-BR")),
+DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm z", Locale.getDefault()),
         )
         val status = if (whenSigned == null) "Pendente" else "Assinado em $whenSigned"
         val contact = listOfNotNull(

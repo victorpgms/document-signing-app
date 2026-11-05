@@ -23,7 +23,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -312,4 +311,4 @@ internal fun DocumentStatus.displayLabel(): String = when (this) {
 }
 
 private val activeStatuses = setOf(DocumentStatus.DRAFT, DocumentStatus.SENT, DocumentStatus.PARTIALLY_SIGNED)
-private val documentDateFormatter = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.forLanguageTag("pt-BR"))
+private val documentDateFormatter = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.getDefault())

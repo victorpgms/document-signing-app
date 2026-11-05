@@ -16,10 +16,10 @@ Demonstrar o fluxo local de preparação, envio, assinatura e acompanhamento de 
 8. **PDF final** — abrir o documento concluído, conferir o histórico e exportar uma cópia pelo seletor Android.
 9. **Próximas evoluções** — integração com backend e notificações remotas na Sprint 2.
 
-## Roteiro de demonstração
+## Roteiro de apresentação
 
-- Usar as contas fictícias exibidas na tela de login do aplicativo.
-- Usar somente dados fictícios e um PDF de teste não sensível.
+- Criar previamente as contas necessárias pela opção de cadastro do aplicativo.
+- Usar somente dados não sensíveis e um PDF apropriado para apresentação.
 - Evidenciar que o documento original permanece preservado.
 
 ## Evidências necessárias

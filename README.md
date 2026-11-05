@@ -34,25 +34,7 @@ O fluxo atual é local. PDFs, usuários, signatários, eventos e versões são a
 - Validação pública por token, leitura de QR Code ou importação do PDF, sem login.
 - Preferências de aparência: Sistema, Claro e Escuro.
 
-## Contas fictícias para demonstração
-
-As contas abaixo são locais e fictícias. Não use senhas ou e-mails pessoais no aplicativo.
-
-### Administradores
-
-| Nome | E-mail | Senha |
-| --- | --- | --- |
-| Victor Almeida | `admin.victor@fides.local` | `fides1234` |
-| Lucas | `admin.lucas@fides.local` | `fides1234` |
-
-### Signatários
-
-| Nome | E-mail | Senha |
-| --- | --- | --- |
-| Ana Teste | `ana.teste@fides.local` | `fides1234` |
-| Bruno Teste | `bruno.teste@fides.local` | `fides1234` |
-
-Os usuários podem criar uma nova conta pela opção **Criar uma conta** na tela de login. O cadastro permite escolher entre **Administrador** e **Signatário**. Essa abertura de cadastro é adequada para a demonstração local; em uma versão com backend, a criação de administradores deverá ter uma política de autorização própria.
+As contas são criadas pelo usuário pela opção **Criar uma conta** na tela de login. O cadastro permite escolher entre **Administrador** e **Signatário**. Nesta versão, os dados são armazenados localmente no dispositivo.
 
 ## Como executar
 
@@ -60,7 +42,7 @@ Os usuários podem criar uma nova conta pela opção **Criar uma conta** na tela
 2. Aguarde a sincronização do Gradle.
 3. Use um emulador ou aparelho com Android 8.0 (API 26) ou superior.
 4. Execute a configuração `app`.
-5. Na tela de login, use uma conta fictícia ou crie uma nova conta.
+5. Na tela de login, selecione **Criar uma conta** e cadastre um acesso para iniciar o uso.
 
 Para gerar o APK de depuração:
 
@@ -76,11 +58,11 @@ No Windows:
 
 O APK é gerado em `app/build/outputs/apk/debug/app-debug.apk`.
 
-## Roteiros rápidos de demonstração
+## Fluxos principais
 
 ### Administrador
 
-1. Entre com `admin.victor@fides.local`.
+1. Crie ou acesse uma conta de administrador.
 2. Abra **Novo documento**.
 3. Importe um PDF.
 4. Informe o título e selecione um ou mais signatários.
@@ -91,9 +73,9 @@ O APK é gerado em `app/build/outputs/apk/debug/app-debug.apk`.
 
 ### Signatário
 
-1. Saia da conta do administrador.
-2. Entre com `ana.teste@fides.local`.
-3. Abra um documento vinculado ao e-mail.
+1. Cadastre ou acesse uma conta de signatário com o e-mail vinculado à solicitação.
+2. Saia da conta do administrador.
+3. Abra um documento recebido.
 4. Revise as páginas e desenhe a assinatura.
 5. Confirme e exporte o documento assinado.
 
@@ -130,7 +112,7 @@ Integrantes informados no material compartilhado do projeto:
 - Guilherme Santana Paes
 - Simara Santos Silva
 
-As funções individuais podem ser detalhadas na planilha conforme a divisão de tarefas. O README não publica e-mails pessoais; os acessos de demonstração usam apenas endereços fictícios locais.
+As funções individuais podem ser detalhadas na planilha conforme a divisão de tarefas.
 
 ## Git e colaboração
 
