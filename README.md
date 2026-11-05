@@ -1,54 +1,173 @@
 # Fides
 
-Aplicativo Android nativo para preparar, enviar, assinar e acompanhar documentos PDF em um fluxo local.
+## Assinaturas de documentos com clareza, controle e confiança
 
-## O que o app faz
+O Fides é um aplicativo Android nativo criado para simplificar o ciclo de vida de documentos PDF que precisam ser preparados, assinados e acompanhados.
 
-O Fides possui dois perfis:
+Em um único fluxo, o usuário pode importar um documento, selecionar os participantes, definir exatamente onde cada assinatura será inserida, enviar a solicitação, acompanhar o andamento e validar o resultado final.
 
-- Administrador: cadastra signatários, importa PDFs, configura campos de assinatura, revisa, envia e acompanha documentos.
-- Signatário: acessa somente documentos vinculados ao seu e-mail, visualiza o PDF, assina e exporta o resultado.
+> Uma experiência de assinatura organizada, visual e acessível, com os dados armazenados localmente no dispositivo.
 
-O fluxo atual é local. PDFs, usuários, signatários, eventos e versões são armazenados no banco Room privado do aplicativo. Não há backend remoto nesta versão.
+## Por que usar o Fides?
 
-## Funcionalidades atuais
+- **Fluxo completo:** da preparação do PDF à exportação do documento assinado.
+- **Controle por perfil:** administradores gerenciam documentos e participantes; signatários acessam apenas o que está vinculado a eles.
+- **Precisão visual:** os campos de assinatura são posicionados diretamente sobre as páginas do PDF.
+- **Rastreabilidade:** eventos, versões, status e participantes ficam registrados no histórico do documento.
+- **Validação integrada:** documentos concluídos podem ser consultados por código, QR Code ou pelo próprio PDF.
+- **Privacidade local:** nesta versão, os dados permanecem no armazenamento privado do aplicativo.
 
-- Login local com senha protegida por hash.
-- Cadastro local de administradores e signatários.
-- Seleção do tipo de conta no cadastro.
-- Controle de acesso por perfil.
-- Cadastro, edição, listagem e seleção de signatários.
-- Importação e visualização de PDFs.
-- Seleção de papéis: contratante, contratado e testemunha.
-- Inclusão, posicionamento e exclusão de campos de assinatura.
-- Revisão e envio local de documentos.
-- Histórico, status parcial e status concluído.
-- Assinatura manuscrita local.
-- Geração de nova versão após assinatura.
+## Experiência do produto
+
+O Fides foi desenhado para tornar um processo normalmente fragmentado mais simples de entender e executar.
+
+- Interface construída com Jetpack Compose e Material 3.
+- Identidade visual baseada em azul, roxo, amarelo e fundo claro, com suporte a tema escuro.
+- Navegação organizada por contexto: documentos, signatários, perfil e acompanhamento.
+- Idioma padrão em inglês, com suporte a português conforme a configuração do aparelho.
+- Ícone e elementos visuais próprios da marca Fides.
+
+## Funcionalidades
+
+### Preparação e gerenciamento de documentos
+
+- Importação e visualização de arquivos PDF.
+- Definição de título e identificação do documento.
+- Suporte a documentos com múltiplas páginas.
+- Criação, edição e exclusão protegida de rascunhos próprios.
+- Cancelamento de solicitações pendentes com preservação do histórico.
+- Criação de nova versão para alterações posteriores ao envio.
+- Preservação do arquivo original durante o fluxo.
+
+### Participantes e campos de assinatura
+
+- Cadastro administrativo de signatários.
+- Seleção de administradores elegíveis como participantes, sem duplicação de contas.
+- Exibição de nome, e-mail e telefone dos participantes.
+- Definição do papel no documento: contratante, contratado ou testemunha.
+- Um ou mais participantes por documento.
+- Vários campos de assinatura para o mesmo participante.
+- Posicionamento dos campos diretamente na página do PDF.
+- Validação para manter os campos dentro dos limites da página.
+- Movimentação e exclusão de campos antes do envio.
+- Revisão do documento, participantes e campos antes da solicitação.
+
+### Assinatura e acompanhamento
+
+- Assinatura manuscrita realizada no próprio aplicativo.
+- Acesso do signatário condicionado ao e-mail vinculado à solicitação.
+- Bloqueio de novas assinaturas em solicitações canceladas.
+- Conclusão somente depois das assinaturas obrigatórias.
+- Status de rascunho, aguardando assinaturas, parcialmente assinado, concluído e cancelado.
+- Histórico de eventos e responsáveis.
 - Visualização e exportação do PDF final.
-- Exclusão protegida de rascunhos próprios e cancelamento de solicitações pendentes com histórico.
-- Administradores elegíveis como participantes sem criação de conta duplicada.
-- Perfil com nome, e-mail, telefone/celular e troca de senha.
-- Cadastro administrativo de signatários com credencial temporária gerada com `SecureRandom` e convite pelo compartilhamento nativo do Android.
-- Página de resumo no PDF concluído com participantes, papéis, status, horários, representações visuais, token, QR Code e hash SHA-256.
-- Validação pública por token, leitura de QR Code ou importação do PDF, sem login.
-- Preferências de aparência: Sistema, Claro e Escuro.
 
-As contas são criadas pelo usuário pela opção **Criar uma conta** na tela de login. O cadastro permite escolher entre **Administrador** e **Signatário**. Nesta versão, os dados são armazenados localmente no dispositivo.
+### Acesso e contas
+
+- Cadastro local de administradores e signatários.
+- Escolha do tipo de conta no cadastro.
+- Autenticação com senha protegida por hash.
+- Controle de acesso entre os perfis.
+- Perfil com nome, e-mail e telefone/celular.
+- Atualização de dados de contato e troca de senha.
+- Geração de credencial temporária para novos signatários.
+- Compartilhamento nativo das instruções de acesso pelo Android.
+
+### Validação e autenticidade
+
+- Geração de identificador de validação para documentos concluídos.
+- Hash SHA-256 para verificação da integridade do PDF analisado.
+- QR Code contendo somente o token de validação.
+- Página de resumo adicionada ao final do documento concluído.
+- Resumo com participantes, papéis, status, datas, horários, assinaturas e código de validação.
+- Consulta sem login por token, QR Code ou importação do PDF.
+- Diferenciação entre registro encontrado e integridade criptográfica confirmada.
+
+## Fluxos principais
+
+### Para administradores
+
+1. Criar ou acessar uma conta de administrador.
+2. Cadastrar os signatários necessários.
+3. Criar um novo documento e importar o PDF.
+4. Definir título, participantes e papéis.
+5. Posicionar os campos de assinatura nas páginas.
+6. Revisar a configuração e enviar a solicitação.
+7. Acompanhar status, histórico e assinaturas pendentes.
+8. Consultar e exportar o documento concluído.
+
+### Para signatários
+
+1. Criar ou acessar uma conta com o e-mail vinculado à solicitação.
+2. Visualizar os documentos recebidos.
+3. Abrir o PDF e revisar as páginas.
+4. Desenhar e confirmar a assinatura.
+5. Consultar o status atualizado e exportar o resultado quando disponível.
+
+### Para validação pública
+
+1. Selecionar **Validar documento sem login** na tela inicial.
+2. Informar o código, ler o QR Code ou selecionar um PDF.
+3. Consultar o registro do documento.
+4. Conferir participantes, status e resultado da integridade do arquivo.
+
+## Arquitetura
+
+O projeto utiliza uma organização em camadas para manter a interface desacoplada das regras de negócio e da persistência.
+
+```text
+Presentation  ->  Domain  ->  Data
+      \            |          /
+             Core compartilhado
+```
+
+- **Presentation:** telas Compose, navegação, temas e estado visual.
+- **Domain:** modelos, contratos de repositório, regras de negócio e casos de uso.
+- **Data:** banco Room, DAOs, entidades locais, mapeadores e repositórios.
+- **Core:** autenticação, segurança, manipulação de PDF, tema e componentes compartilhados.
+
+Essa separação permite substituir os repositórios locais por serviços remotos no futuro sem acoplar a interface a uma implementação específica.
+
+## Tecnologias
+
+- Kotlin.
+- Android nativo.
+- Jetpack Compose e Material 3.
+- Room para persistência local.
+- Coroutines e StateFlow.
+- Android PdfRenderer para visualização.
+- PDFBox-Android para geração e composição do PDF final.
+- JUnit e testes instrumentados Android.
+- Java 17.
+- Android API 26 ou superior.
+
+## Segurança e privacidade
+
+- Senhas não são armazenadas em texto puro.
+- Credenciais temporárias são geradas de forma segura para novos signatários.
+- O QR Code não contém dados pessoais dos participantes.
+- O documento original é preservado durante a criação das versões assinadas.
+- O acesso às funções é separado por perfil.
+- A validação distingue a existência do registro da integridade criptográfica do arquivo.
 
 ## Como executar
 
-1. Abra o projeto no Android Studio.
-2. Aguarde a sincronização do Gradle.
-3. Use um emulador ou aparelho com Android 8.0 (API 26) ou superior.
+### Requisitos
+
+- Android Studio.
+- JDK 17.
+- Android SDK com API 26 ou superior.
+- Emulador Android ou aparelho compatível.
+
+### Executar no Android Studio
+
+1. Abra a pasta do projeto no Android Studio.
+2. Aguarde a sincronização das dependências.
+3. Selecione um emulador ou aparelho conectado.
 4. Execute a configuração `app`.
-5. Na tela de login, selecione **Criar uma conta** e cadastre um acesso para iniciar o uso.
+5. Na tela inicial, selecione **Criar uma conta** para iniciar o uso.
 
-Para gerar o APK de depuração:
-
-```bash
-./gradlew assembleDebug
-```
+### Gerar o APK de depuração
 
 No Windows:
 
@@ -56,55 +175,29 @@ No Windows:
 .\gradlew.bat assembleDebug
 ```
 
-O APK é gerado em `app/build/outputs/apk/debug/app-debug.apk`.
+O arquivo será gerado em:
 
-## Fluxos principais
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
 
-### Administrador
+Versão atual do aplicativo: **1.4.0**.
 
-1. Crie ou acesse uma conta de administrador.
-2. Abra **Novo documento**.
-3. Importe um PDF.
-4. Informe o título e selecione um ou mais signatários.
-5. Defina o papel de cada participante.
-6. Posicione os campos de assinatura na página.
-7. Revise e envie o documento.
-8. Consulte o status e o histórico.
+## Escopo atual e evolução
 
-### Signatário
+O Fides está preparado para uma experiência local completa de preparação, assinatura e validação de documentos.
 
-1. Cadastre ou acesse uma conta de signatário com o e-mail vinculado à solicitação.
-2. Saia da conta do administrador.
-3. Abra um documento recebido.
-4. Revise as páginas e desenhe a assinatura.
-5. Confirme e exporte o documento assinado.
+Nesta versão, o envio, a autenticação, a validação e o armazenamento funcionam localmente no dispositivo. Integrações com backend, sincronização entre aparelhos, notificações automáticas por e-mail e certificação digital PKI exigem uma etapa posterior de infraestrutura.
 
-### Validação pública
+Também permanecem como evoluções naturais:
 
-1. Na tela de login, abra **Validar documento sem login**.
-2. Consulte o token, leia o QR Code do resumo ou selecione o PDF final.
-3. A consulta por token confirma a existência do registro. A verificação de integridade só é confirmada quando o PDF completo é analisado e o SHA-256 confere.
-
-## Arquitetura
-
-- `presentation`: telas Compose, navegação e estado visual.
-- `domain`: modelos, contratos, regras e casos de uso.
-- `data`: Room, DAOs, entidades, mapeadores e repositórios locais.
-- `core`: segurança, PDF, tema e utilitários compartilhados.
-
-Tecnologias principais:
-
-- Kotlin.
-- Jetpack Compose e Material 3.
-- Room.
-- Coroutines e StateFlow.
-- Android `PdfRenderer`.
-- PDFBox-Android para geração do PDF assinado.
-- JUnit e testes instrumentados Android.
+- assinatura de APK release para distribuição pública;
+- validações adicionais para PDFs inválidos ou corrompidos;
+- ampliação dos testes de acessibilidade;
+- sincronização remota e consulta pública multi-dispositivo;
+- integração com provedores de e-mail e backend.
 
 ## Equipe
-
-Integrantes informados no material compartilhado do projeto:
 
 - Alberto da Silva Lima
 - Lucas Giovani de Oliveira
@@ -112,31 +205,4 @@ Integrantes informados no material compartilhado do projeto:
 - Guilherme Santana Paes
 - Simara Santos Silva
 
-As funções individuais podem ser detalhadas na planilha conforme a divisão de tarefas.
-
-## Git e colaboração
-
-- `main`: versão integrada e estável.
-- `feature/`: novas funcionalidades.
-- `fix/`: correções.
-- `docs/`: documentação.
-- `test/`: validações isoladas.
-
-Use commits pequenos no padrão Conventional Commits:
-
-```text
-feat(auth): add local account registration
-docs(project): improve README usage guide
-test(auth): validate account registration
-```
-
-Não faça commits diretamente na `main`. Abra um Pull Request, valide o build e atualize a planilha após a integração.
-
-## Limitações conhecidas
-
-- O envio é local e não usa servidor remoto.
-- O cadastro de signatários abre o compartilhamento nativo com uma senha temporária. Firebase, Brevo e envio automático por e-mail ainda exigem configuração de serviço externo e não fazem parte desta versão local.
-- A validação pública consulta o banco Room da instalação atual. O QR Code não expõe dados pessoais, mas não substitui um backend público multi-dispositivo.
-- A assinatura é uma representação manuscrita local, sem infraestrutura PKI.
-- O APK release ainda precisa ser assinado para distribuição final.
-- A validação final de PDFs inválidos, estados de erro, acessibilidade e alguns casos de movimentação de campos permanece em andamento.
+O Fides combina uma jornada simples para o usuário com uma base técnica preparada para crescer: documentos organizados, participantes identificados, assinaturas rastreáveis e validação acessível em um único aplicativo.
