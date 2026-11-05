@@ -32,6 +32,9 @@ class LocalDocumentRepository(private val database: FidesDatabase) : DocumentRep
     override suspend fun getById(id: String): Document? =
         dao.getById(id)?.toDomain(dao)
 
+    override suspend fun getByValidationToken(token: String): Document? =
+        dao.getByValidationToken(token)?.toDomain(dao)
+
     override suspend fun save(document: Document) {
         database.withTransaction {
             dao.save(document.toEntity())
@@ -98,6 +101,8 @@ private suspend fun DocumentEntity.toDomain(dao: br.com.fiap.fides.data.local.da
         version = version,
         previousVersionId = previousVersionId,
         signedFilePath = signedFilePath,
+        validationToken = validationToken,
+        finalSha256 = finalSha256,
     )
 }
 
@@ -113,6 +118,8 @@ private fun Document.toEntity() = DocumentEntity(
     version = version,
     previousVersionId = previousVersionId,
     signedFilePath = signedFilePath,
+    validationToken = validationToken,
+    finalSha256 = finalSha256,
 )
 
 private fun DocumentSigner.toEntity() = DocumentSignerEntity(documentId, signerId, role.name, required, signedAt?.toEpochMilli())

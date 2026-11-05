@@ -19,6 +19,7 @@ class SessionStore(private val context: Context) : SessionRepository {
         val email = stringPreferencesKey("email")
         val displayName = stringPreferencesKey("display_name")
         val role = stringPreferencesKey("role")
+        val phone = stringPreferencesKey("phone")
     }
 
     override val session: Flow<UserSession?> = context.sessionDataStore.data.map { preferences ->
@@ -28,7 +29,7 @@ class SessionStore(private val context: Context) : SessionRepository {
         val role = preferences[Keys.role]?.let { value ->
             runCatching { UserRole.valueOf(value) }.getOrNull()
         } ?: return@map null
-        UserSession(id, email, displayName, role)
+        UserSession(id, email, displayName, role, preferences[Keys.phone].orEmpty())
     }
 
     override suspend fun save(user: AuthenticatedUser) {
@@ -37,6 +38,7 @@ class SessionStore(private val context: Context) : SessionRepository {
             preferences[Keys.email] = user.email
             preferences[Keys.displayName] = user.displayName
             preferences[Keys.role] = user.role.name
+            preferences[Keys.phone] = user.phone
         }
     }
 

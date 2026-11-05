@@ -2,10 +2,13 @@ package br.com.fiap.fides
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,9 +32,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -52,7 +56,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -62,7 +68,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import br.com.fiap.fides.core.ui.theme.FidesTheme
-import br.com.fiap.fides.data.local.DemoUserSeeder
 import br.com.fiap.fides.data.local.FidesDatabase
 import br.com.fiap.fides.data.local.FidesDatabaseProvider
 import br.com.fiap.fides.data.local.SessionStore
@@ -88,6 +93,7 @@ import java.util.UUID
 
 private enum class FidesRoute(val route: String, val label: String) {
     LOGIN("login", "Login"),
+    VALIDATE("validate", "Validar documento"),
     REGISTER("register", "Criar conta"),
     DOCUMENTS("documents", "Documentos"),
     SIGNER_DASHBOARD("signer-dashboard", "Pendências"),
@@ -119,7 +125,7 @@ private fun FidesApp(
     val navController = rememberNavController()
     val authRepository = remember { LocalAuthRepository(database.userDao(), database.signerDao()) }
     val signerRepository = remember {
-        AdminOnlySignerRepository(LocalSignerRepository(database.signerDao()), sessionRepository)
+        AdminOnlySignerRepository(LocalSignerRepository(database.signerDao(), database.userDao()), sessionRepository)
     }
     var accountReady by remember { mutableStateOf(false) }
     var currentRole by remember { mutableStateOf<UserRole?>(null) }
@@ -130,7 +136,6 @@ private fun FidesApp(
     val systemDarkTheme = isSystemInDarkTheme()
     val scope = rememberCoroutineScope()
     LaunchedEffect(database) {
-        withContext(Dispatchers.Default) { DemoUserSeeder.ensure(database) }
         accountReady = true
     }
     LaunchedEffect(accountReady) {
@@ -155,6 +160,28 @@ private fun FidesApp(
         listOf(FidesRoute.DOCUMENTS, FidesRoute.SIGNER_DASHBOARD, FidesRoute.SIGNERS, FidesRoute.PROFILE)
     }
     val showBottomBar = currentDestination?.route in navigationItems.map { it.route }
+    val activity = LocalActivity.current
+    val homeRoute = if (currentRole == UserRole.SIGNER) {
+        FidesRoute.SIGNER_DASHBOARD.route
+    } else {
+        FidesRoute.DOCUMENTS.route
+    }
+
+    BackHandler(enabled = currentDestination?.route != FidesRoute.LOGIN.route) {
+        if (currentRole == null) {
+            navController.popBackStack(FidesRoute.LOGIN.route, inclusive = false)
+        } else if (currentDestination?.route == homeRoute) {
+            activity?.finish()
+        } else {
+            selectedSignerDocumentId = null
+            selectedAdminDocumentId = null
+            selectedDraftDocumentId = null
+            navController.navigate(homeRoute) {
+                popUpTo(homeRoute) { inclusive = false }
+                launchSingleTop = true
+            }
+        }
+    }
 
     FidesTheme(
         darkTheme = when (themeMode) {
@@ -182,22 +209,29 @@ private fun FidesApp(
                                     }
                                 },
                                 icon = {
-                                    Text(
-                                        when (item) {
-                                            FidesRoute.DOCUMENTS -> "▤"
-                                            FidesRoute.SIGNER_DASHBOARD -> "✓"
-                                            FidesRoute.SIGNERS -> "♙"
-                                            FidesRoute.PROFILE -> "◉"
-                                            else -> "•"
-                                        },
-                                        style = MaterialTheme.typography.titleMedium,
-                                    )
+                                    Box(
+                                        modifier = Modifier.size(40.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            when (item) {
+                                                FidesRoute.DOCUMENTS -> "▤"
+                                                FidesRoute.SIGNER_DASHBOARD -> "✓"
+                                                FidesRoute.SIGNERS -> "♙"
+                                                FidesRoute.PROFILE -> "◉"
+                                                else -> "•"
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textAlign = TextAlign.Center,
+                                            style = MaterialTheme.typography.headlineSmall.copy(fontSize = 28.sp),
+                                        )
+                                    }
                                 },
                                 label = { Text(item.label) },
                                 colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                    selectedIconColor = MaterialTheme.colorScheme.tertiary,
+                                    selectedTextColor = MaterialTheme.colorScheme.tertiary,
+                                    indicatorColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f),
                                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 ),
@@ -217,6 +251,7 @@ private fun FidesApp(
                         authRepository = authRepository,
                         enabled = accountReady,
                         onOpenRegistration = { navController.navigate(FidesRoute.REGISTER.route) },
+                        onOpenValidation = { navController.navigate(FidesRoute.VALIDATE.route) },
                         onLoginSuccess = {
                             sessionRepository.save(it)
                             currentRole = it.role
@@ -229,6 +264,12 @@ private fun FidesApp(
                                 popUpTo(FidesRoute.LOGIN.route) { inclusive = true }
                             }
                         },
+                    )
+                }
+                composable(FidesRoute.VALIDATE.route) {
+                    DocumentValidationScreen(
+                        database = database,
+                        onBack = { navController.popBackStack() },
                     )
                 }
                 composable(FidesRoute.REGISTER.route) {
@@ -336,6 +377,8 @@ private fun FidesApp(
                 }
                 composable(FidesRoute.PROFILE.route) {
                     ProfileScreen(
+                        authRepository = authRepository,
+                        sessionRepository = sessionRepository,
                         themeMode = themeMode,
                         onThemeModeChange = { selectedMode ->
                             scope.launch { themePreferenceStore.save(selectedMode) }
@@ -361,6 +404,7 @@ private fun LoginScreen(
     authRepository: AuthRepository,
     enabled: Boolean,
     onOpenRegistration: () -> Unit,
+    onOpenValidation: () -> Unit,
     onLoginSuccess: suspend (AuthenticatedUser) -> Unit,
 ) {
     var email by rememberSaveable { mutableStateOf("") }
@@ -426,7 +470,7 @@ private fun LoginScreen(
                     enabled = enabled && !authenticating,
                     singleLine = true,
                     label = { Text("E-mail institucional") },
-                    placeholder = { Text("victor@fides.local") },
+                    placeholder = { Text("name@example.com") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                         keyboardType = KeyboardType.Email,
                         imeAction = ImeAction.Next,
@@ -449,9 +493,6 @@ private fun LoginScreen(
                 if (error != null) {
                     Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                 }
-                if (!enabled) {
-                    Text("Preparando contas de demonstração...", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
                 Button(
                     onClick = ::submitLogin,
                     shape = MaterialTheme.shapes.small,
@@ -469,14 +510,15 @@ private fun LoginScreen(
                 ) {
                     Text("Criar uma conta")
                 }
+                TextButton(
+                    onClick = onOpenValidation,
+                    enabled = !authenticating,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Validar documento sem login")
+                }
             }
         }
-        Text(
-            "Admins: admin.victor@fides.local ou admin.lucas@fides.local / fides1234\nSignatários: ana.teste@fides.local ou bruno.teste@fides.local / fides1234",
-            modifier = Modifier.padding(top = 18.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -537,7 +579,7 @@ private fun RegistrationScreen(
         Spacer(Modifier.height(24.dp))
         Text("Criar conta", style = MaterialTheme.typography.headlineLarge)
         Text(
-            "Cadastre um acesso local para a demonstração.",
+            "Crie uma conta para acessar o Fides.",
             modifier = Modifier.padding(top = 6.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -581,17 +623,15 @@ private fun RegistrationScreen(
                         imeAction = ImeAction.Next,
                     ),
                 )
-                if (role == UserRole.SIGNER) {
-                    OutlinedTextField(
-                        value = phone,
-                        onValueChange = { phone = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !registering,
-                        singleLine = true,
-                        label = { Text("Telefone (opcional)") },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    )
-                }
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { phone = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !registering,
+                    singleLine = true,
+                    label = { Text("Telefone/celular com DDD") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Phone),
+                )
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
@@ -720,25 +760,145 @@ private fun SignerDashboardScreen(
 
 @Composable
 private fun ProfileScreen(
+    authRepository: AuthRepository,
+    sessionRepository: SessionRepository,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     onLogout: () -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val session by sessionRepository.session.collectAsState(initial = null)
+    var displayName by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var phone by rememberSaveable { mutableStateOf("") }
+    var profileMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var profileError by rememberSaveable { mutableStateOf<String?>(null) }
+    var currentPassword by rememberSaveable { mutableStateOf("") }
+    var newPassword by rememberSaveable { mutableStateOf("") }
+    var confirmNewPassword by rememberSaveable { mutableStateOf("") }
+    var savingProfile by remember { mutableStateOf(false) }
     val versionName = remember(context) {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
             .getOrNull()
             ?: "1.0.0"
     }
+    LaunchedEffect(session?.userId) {
+        val userId = session?.userId ?: return@LaunchedEffect
+        authRepository.getProfile(userId)?.let { profile ->
+            displayName = profile.displayName
+            email = profile.email
+            phone = profile.phone
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         FidesHeader()
         Text("Perfil", style = MaterialTheme.typography.headlineLarge)
         Text("Preferências da conta e aparência", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedTextField(
+            value = displayName,
+            onValueChange = { displayName = it; profileError = null },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Nome completo") },
+            singleLine = true,
+            enabled = !savingProfile,
+        )
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it; profileError = null },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("E-mail") },
+            singleLine = true,
+            enabled = !savingProfile,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Email),
+        )
+        OutlinedTextField(
+            value = phone,
+            onValueChange = { phone = it; profileError = null },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Telefone/celular com DDD") },
+            singleLine = true,
+            enabled = !savingProfile,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Phone),
+        )
+        Button(
+            onClick = {
+                val userId = session?.userId ?: return@Button
+                scope.launch {
+                    savingProfile = true
+                    profileError = null
+                    val result = authRepository.updateProfile(userId, displayName, email, phone)
+                    result.user?.let {
+                        sessionRepository.save(it)
+                        profileMessage = "Dados de contato atualizados."
+                    }
+                    profileError = result.error
+                    savingProfile = false
+                }
+            },
+            enabled = !savingProfile && displayName.isNotBlank() && email.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.small,
+        ) { Text(if (savingProfile) "Salvando..." else "Salvar dados de contato") }
+        profileMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+        profileError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        Text("Segurança", style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(
+            value = currentPassword,
+            onValueChange = { currentPassword = it; profileError = null },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Senha atual") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            enabled = !savingProfile,
+        )
+        OutlinedTextField(
+            value = newPassword,
+            onValueChange = { newPassword = it; profileError = null },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Nova senha") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            enabled = !savingProfile,
+        )
+        OutlinedTextField(
+            value = confirmNewPassword,
+            onValueChange = { confirmNewPassword = it; profileError = null },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Confirmar nova senha") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            enabled = !savingProfile,
+        )
+        OutlinedButton(
+            onClick = {
+                val userId = session?.userId ?: return@OutlinedButton
+                if (newPassword != confirmNewPassword) {
+                    profileError = "As novas senhas precisam ser iguais."
+                    return@OutlinedButton
+                }
+                scope.launch {
+                    savingProfile = true
+                    val error = authRepository.updatePassword(userId, currentPassword.toCharArray(), newPassword.toCharArray())
+                    profileError = error
+                    if (error == null) {
+                        currentPassword = ""
+                        newPassword = ""
+                        confirmNewPassword = ""
+                        profileMessage = "Senha atualizada com sucesso."
+                    }
+                    savingProfile = false
+                }
+            },
+            enabled = !savingProfile && currentPassword.isNotBlank() && newPassword.isNotBlank() && confirmNewPassword.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Atualizar senha") }
         Text("Aparência", style = MaterialTheme.typography.titleMedium)
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),

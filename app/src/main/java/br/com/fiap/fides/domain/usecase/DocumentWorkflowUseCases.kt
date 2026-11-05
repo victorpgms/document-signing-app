@@ -9,6 +9,7 @@ import br.com.fiap.fides.domain.repository.DocumentRepository
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
+import br.com.fiap.fides.core.pdf.ValidationTokenGenerator
 
 class DocumentValidationException(message: String) : IllegalArgumentException(message)
 
@@ -65,6 +66,54 @@ class SendDocumentUseCase(
     }
 }
 
+class DeleteDraftUseCase(
+    private val repository: DocumentRepository,
+    private val clock: Clock = Clock.systemUTC(),
+) {
+    suspend operator fun invoke(documentId: String, actorId: String) {
+        val document = repository.getById(documentId) ?: throw DocumentValidationException("Documento não encontrado.")
+        if (document.ownerId != actorId) throw DocumentValidationException("Você não tem autorização para excluir este documento.")
+        if (document.status != DocumentStatus.DRAFT) throw DocumentValidationException("Somente rascunhos podem ser excluídos.")
+        repository.recordEvent(
+            DocumentEvent(
+                id = UUID.randomUUID().toString(),
+                documentId = documentId,
+                actorId = actorId,
+                type = DocumentEventType.DELETED,
+                occurredAt = Instant.now(clock),
+                details = "Rascunho excluído pelo responsável.",
+            ),
+        )
+        repository.delete(documentId)
+    }
+}
+
+class CancelDocumentUseCase(
+    private val repository: DocumentRepository,
+    private val clock: Clock = Clock.systemUTC(),
+) {
+    suspend operator fun invoke(documentId: String, actorId: String): Document {
+        val document = repository.getById(documentId) ?: throw DocumentValidationException("Documento não encontrado.")
+        if (document.ownerId != actorId) throw DocumentValidationException("Você não tem autorização para cancelar este documento.")
+        if (document.status !in setOf(DocumentStatus.SENT, DocumentStatus.PARTIALLY_SIGNED)) {
+            throw DocumentValidationException("Somente solicitações pendentes podem ser canceladas.")
+        }
+        val now = Instant.now(clock)
+        repository.updateStatus(documentId, DocumentStatus.CANCELLED, now)
+        repository.recordEvent(
+            DocumentEvent(
+                id = UUID.randomUUID().toString(),
+                documentId = documentId,
+                actorId = actorId,
+                type = DocumentEventType.CANCELLED,
+                occurredAt = now,
+                details = "Novas assinaturas bloqueadas pelo cancelamento.",
+            ),
+        )
+        return document.copy(status = DocumentStatus.CANCELLED, updatedAt = now)
+    }
+}
+
 class CreateNewDocumentVersionUseCase(
     private val repository: DocumentRepository,
     private val clock: Clock = Clock.systemUTC(),
@@ -111,4 +160,13 @@ class CreateNewDocumentVersionUseCase(
 
 class TrackDocumentsUseCase(private val repository: DocumentRepository) {
     suspend operator fun invoke(userId: String): List<Document> = repository.getAllForUser(userId)
+}
+
+class EnsureValidationTokenUseCase(private val repository: DocumentRepository) {
+    suspend operator fun invoke(document: Document): Document {
+        if (!document.validationToken.isNullOrBlank()) return document
+        return document.copy(validationToken = ValidationTokenGenerator.create(), finalSha256 = null).also {
+            repository.save(it)
+        }
+    }
 }

@@ -12,8 +12,8 @@ android {
         applicationId = "br.com.fiap.fides"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 8
+        versionName = "1.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -63,6 +63,8 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.pdfbox.android)
+    implementation(libs.zxing.core)
+    implementation(libs.zxing.embedded)
     ksp(libs.androidx.room.compiler)
 
     testImplementation(libs.junit)

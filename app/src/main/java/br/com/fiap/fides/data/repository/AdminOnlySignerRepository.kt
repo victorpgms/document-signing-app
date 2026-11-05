@@ -23,11 +23,15 @@ class AdminOnlySignerRepository(
 
     override suspend fun save(signer: Signer) {
         requireAdmin()
+        if (signer.accountRole == UserRole.ADMIN) {
+            throw AccessDeniedException()
+        }
         delegate.save(signer)
     }
 
     override suspend fun delete(id: String) {
         requireAdmin()
+        delegate.getById(id)?.takeIf { it.accountRole == UserRole.ADMIN }?.let { throw AccessDeniedException() }
         delegate.delete(id)
     }
 

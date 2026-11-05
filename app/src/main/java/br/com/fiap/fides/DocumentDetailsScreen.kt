@@ -20,7 +20,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -43,6 +42,7 @@ import br.com.fiap.fides.domain.model.Document
 import br.com.fiap.fides.domain.model.DocumentEvent
 import br.com.fiap.fides.domain.model.DocumentEventType
 import br.com.fiap.fides.domain.model.DocumentStatus
+import br.com.fiap.fides.domain.model.Signer
 import br.com.fiap.fides.domain.repository.SessionRepository
 import br.com.fiap.fides.domain.usecase.CreateNewDocumentVersionUseCase
 import java.time.ZoneId
@@ -62,11 +62,11 @@ internal fun DocumentDetailsScreen(
     val scope = rememberCoroutineScope()
     val session by sessionRepository.session.collectAsState(initial = null)
     val repository = remember(database) { LocalDocumentRepository(database) }
-    val signerRepository = remember(database) { LocalSignerRepository(database.signerDao()) }
+    val signerRepository = remember(database) { LocalSignerRepository(database.signerDao(), database.userDao()) }
     val renderer = remember { PdfPageRenderer() }
     var document by remember { mutableStateOf<Document?>(null) }
     var events by remember { mutableStateOf(emptyList<DocumentEvent>()) }
-    var signerNames by remember { mutableStateOf(emptyMap<String, String>()) }
+    var signerDetails by remember { mutableStateOf(emptyMap<String, Signer>()) }
     var pageBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var pageCount by remember { mutableStateOf(0) }
     var pageIndex by rememberSaveable { mutableStateOf(0) }
@@ -93,12 +93,12 @@ internal fun DocumentDetailsScreen(
         runCatching {
             val loaded = repository.getById(documentId) ?: error("Documento não encontrado.")
             val loadedEvents = repository.getEvents(documentId)
-            val names = signerRepository.getAll().associate { it.id to it.fullName }
-            Triple(loaded, loadedEvents, names)
-        }.onSuccess { (loaded, loadedEvents, names) ->
+            val details = signerRepository.getAll().associateBy { it.id }
+            Triple(loaded, loadedEvents, details)
+        }.onSuccess { (loaded, loadedEvents, details) ->
             document = loaded
             events = loadedEvents
-            signerNames = names
+            signerDetails = details
             message = null
         }.onFailure { message = it.message ?: "Não foi possível abrir o documento." }
         loading = false
@@ -193,8 +193,10 @@ internal fun DocumentDetailsScreen(
                 item {
                     Text("Participantes", style = MaterialTheme.typography.titleMedium)
                     current.signers.forEach { signer ->
-                        val name = signerNames[signer.signerId] ?: signer.signerId
-                        Text("$name · ${signer.role.displayLabel()} · ${if (signer.signedAt == null) "Pendente" else "Assinado"}")
+                        val detail = signerDetails[signer.signerId]
+                        val name = detail?.fullName ?: signer.signerId
+                        Text("$name · ${detail?.email ?: "E-mail não informado"}")
+                        Text("${detail?.phone?.takeIf { it.isNotBlank() } ?: "Telefone não informado"} · ${signer.role.displayLabel()} · ${if (signer.signedAt == null) "Pendente" else "Assinado"}")
                     }
                 }
                 item {
@@ -203,7 +205,7 @@ internal fun DocumentDetailsScreen(
                         Text("Nenhum evento registrado.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
                         events.forEach { event ->
-                            val actor = if (event.actorId == session?.userId) session?.displayName else signerNames[event.actorId]
+                            val actor = if (event.actorId == session?.userId) session?.displayName else signerDetails[event.actorId]?.fullName
                             val date = event.occurredAt.atZone(ZoneId.systemDefault()).format(eventDateFormatter)
                             Text("$date · ${event.type.displayLabel()}${actor?.let { " · $it" } ?: ""}")
                         }
@@ -226,6 +228,8 @@ private fun DocumentEventType.displayLabel(): String = when (this) {
     DocumentEventType.SENT -> "Solicitação enviada"
     DocumentEventType.SIGNED -> "Assinatura registrada"
     DocumentEventType.COMPLETED -> "Documento concluído"
+    DocumentEventType.CANCELLED -> "Solicitação cancelada"
+    DocumentEventType.DELETED -> "Rascunho excluído"
 }
 
-private val eventDateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", Locale.forLanguageTag("pt-BR"))
+private val eventDateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", Locale.getDefault())

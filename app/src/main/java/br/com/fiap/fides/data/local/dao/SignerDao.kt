@@ -18,6 +18,12 @@ interface SignerDao {
     @Query("SELECT * FROM signers WHERE email = :email LIMIT 1")
     suspend fun getByEmail(email: String): SignerEntity?
 
+    @Query("UPDATE signers SET fullName = :fullName, email = :email, phone = :phone WHERE id = :id")
+    suspend fun updateContact(id: String, fullName: String, email: String, phone: String)
+
+    @Query("UPDATE signers SET passwordHash = :passwordHash WHERE id = :id")
+    suspend fun updatePassword(id: String, passwordHash: String)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun save(signer: SignerEntity)
 

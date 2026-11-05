@@ -27,7 +27,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -52,6 +51,8 @@ import androidx.core.graphics.createBitmap
 import br.com.fiap.fides.core.pdf.PdfExportService
 import br.com.fiap.fides.core.pdf.PdfPageRenderer
 import br.com.fiap.fides.core.pdf.PdfSignatureService
+import br.com.fiap.fides.core.pdf.PdfSignerSummary
+import br.com.fiap.fides.core.pdf.DocumentValidationService
 import br.com.fiap.fides.data.local.FidesDatabase
 import br.com.fiap.fides.data.repository.LocalDocumentRepository
 import br.com.fiap.fides.data.repository.LocalSignerRepository
@@ -61,6 +62,7 @@ import br.com.fiap.fides.domain.repository.SessionRepository
 import br.com.fiap.fides.domain.usecase.ApplySignatureUseCase
 import br.com.fiap.fides.domain.usecase.CaptureSignatureUseCase
 import br.com.fiap.fides.domain.usecase.CompleteDocumentUseCase
+import br.com.fiap.fides.domain.usecase.EnsureValidationTokenUseCase
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
@@ -74,7 +76,7 @@ internal fun SignerSigningScreen(
 ) {
     val scope = rememberCoroutineScope()
     val repository = remember(database) { LocalDocumentRepository(database) }
-    val signerRepository = remember(database) { LocalSignerRepository(database.signerDao()) }
+    val signerRepository = remember(database) { LocalSignerRepository(database.signerDao(), database.userDao()) }
     val pageRenderer = remember { PdfPageRenderer() }
     val context = androidx.compose.ui.platform.LocalContext.current
     val session by sessionRepository.session.collectAsState(initial = null)
@@ -166,24 +168,42 @@ internal fun SignerSigningScreen(
                     }
                 ApplySignatureUseCase(repository)(currentDocument.id, signerId)
                 val refreshed = repository.getById(currentDocument.id)
-                if (refreshed?.signers?.all { !it.required || it.signedAt != null } == true) {
+                val isComplete = refreshed?.signers?.all { !it.required || it.signedAt != null } == true
+                if (isComplete) {
                     CompleteDocumentUseCase(repository)(currentDocument.id, signerId)
                 }
-                val latest = repository.getById(currentDocument.id)
+                val loaded = repository.getById(currentDocument.id)
                     ?: throw IllegalStateException("Documento não encontrado após a assinatura.")
+                val latest = if (isComplete) EnsureValidationTokenUseCase(repository)(loaded) else loaded
                 val signedFile = File(context.filesDir, "documents/${latest.id}-signed-v${latest.version}.pdf")
-                val signerNames = signerRepository.getAll().associate { it.id to it.fullName }
+                val signerDetails = signerRepository.getAll().associateBy { it.id }
                 val signerLabels = latest.signers.associate { participant ->
-                    val name = signerNames[participant.signerId] ?: participant.signerId
+                    val name = signerDetails[participant.signerId]?.fullName ?: participant.signerId
                     participant.signerId to "$name — ${participant.role.signatureLabel()}"
+                }
+                val signatureRecords = repository.getSignatures(latest.id)
+                val signerSummaries = latest.signers.map { participant ->
+                    val signer = signerDetails[participant.signerId]
+                    PdfSignerSummary(
+                        fullName = signer?.fullName ?: participant.signerId,
+                        email = signer?.email.orEmpty(),
+                        phone = signer?.phone.orEmpty(),
+                        role = participant.role.signatureLabel(),
+                        signedAtEpochMillis = participant.signedAt?.toEpochMilli(),
+                        signatureFilePath = signatureRecords.firstOrNull { it.signerId == participant.signerId }?.localFilePath,
+                    )
                 }
                 PdfSignatureService(context).applySignatures(
                     document = latest,
-                    signatures = repository.getSignatures(latest.id),
+                    signatures = signatureRecords,
                     outputFile = signedFile,
                     signerLabels = signerLabels,
+                    signerSummaries = signerSummaries,
+                    validationToken = latest.validationToken,
+                    includeSummary = isComplete,
                 )
-                repository.save(latest.copy(signedFilePath = signedFile.absolutePath))
+                val finalSha256 = if (isComplete) DocumentValidationService(context).sha256(signedFile) else null
+                repository.save(latest.copy(signedFilePath = signedFile.absolutePath, finalSha256 = finalSha256))
                 null
             }.getOrElse { it.message ?: "Não foi possível salvar a assinatura." }
             busy = false
@@ -224,6 +244,9 @@ internal fun SignerSigningScreen(
                         if (currentSignerHasSigned) "Sua assinatura foi registrada" else "Revise o documento",
                         style = MaterialTheme.typography.titleMedium,
                     )
+                    if (document?.status == br.com.fiap.fides.domain.model.DocumentStatus.CANCELLED) {
+                        Text("Esta solicitação foi cancelada. Novas assinaturas estão bloqueadas.", color = MaterialTheme.colorScheme.error)
+                    }
                     if (currentSignerHasSigned && signedFilePath != null) {
                         Button(
                             onClick = { exportLauncher.launch("${document?.title ?: "documento"}-assinado.pdf") },
@@ -266,7 +289,7 @@ internal fun SignerSigningScreen(
                 }
             }
         }
-        if (document != null && !currentSignerHasSigned) {
+        if (document != null && !currentSignerHasSigned && document?.status != br.com.fiap.fides.domain.model.DocumentStatus.CANCELLED) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),

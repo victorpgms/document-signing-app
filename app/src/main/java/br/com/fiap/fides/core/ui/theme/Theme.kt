@@ -11,9 +11,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 
 private val FidesLightColorScheme = lightColorScheme(
-    primary = BrandBlue,
+    primary = BrandPurple,
     onPrimary = LightSurface,
-    secondary = BrandPurple,
+    secondary = BrandBlue,
     onSecondary = LightSurface,
     tertiary = BrandGold,
     background = LightBackground,
@@ -27,10 +27,10 @@ private val FidesLightColorScheme = lightColorScheme(
 )
 
 private val FidesDarkColorScheme = darkColorScheme(
-    primary = BrandBlue,
-    onPrimary = LightSurface,
-    secondary = BrandPurple,
-    onSecondary = LightSurface,
+    primary = BrandGold,
+    onPrimary = DarkBackground,
+    secondary = DarkBrandBlue,
+    onSecondary = DarkBackground,
     tertiary = BrandGold,
     background = DarkBackground,
     onBackground = DarkOnBackground,
@@ -38,7 +38,7 @@ private val FidesDarkColorScheme = darkColorScheme(
     onSurface = DarkOnBackground,
     surfaceVariant = DarkSurfaceElevated,
     onSurfaceVariant = DarkOnSurfaceVariant,
-    outline = DarkFieldSurface,
+    outline = DarkOutline,
     error = Error,
 )
 

@@ -1,6 +1,8 @@
 package br.com.fiap.fides
 
 import android.util.Patterns
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,7 +20,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,13 +32,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import br.com.fiap.fides.core.security.PasswordHasher
 import br.com.fiap.fides.domain.model.Signer
 import br.com.fiap.fides.domain.repository.SignerRepository
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.security.SecureRandom
 
 @Composable
 internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepository) {
@@ -54,6 +55,7 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
     }
 
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var signers by remember { mutableStateOf(emptyList<Signer>()) }
     var search by rememberSaveable { mutableStateOf("") }
     var showForm by rememberSaveable { mutableStateOf(false) }
@@ -61,9 +63,10 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var feedback by rememberSaveable { mutableStateOf<String?>(null) }
+    var inviteSigner by remember { mutableStateOf<Signer?>(null) }
+    var invitePassword by remember { mutableStateOf("") }
     var selectedSignerId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingDelete by remember { mutableStateOf<Signer?>(null) }
 
@@ -84,7 +87,6 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
         name = ""
         email = ""
         phone = ""
-        password = ""
         error = null
     }
 
@@ -105,13 +107,41 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Signatários", style = MaterialTheme.typography.headlineLarge)
-                    Text("${signers.size} pessoas cadastradas", color = MaterialTheme.colorScheme.primary)
+                    Text("${signers.size} pessoas cadastradas", color = MaterialTheme.colorScheme.tertiary)
                 }
                 Button(onClick = { if (showForm) clearForm() else showForm = true }, shape = MaterialTheme.shapes.small) {
                     Text(if (showForm) "Cancelar" else "Adicionar")
                 }
             }
             feedback?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
+        inviteSigner?.let { signer ->
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f)),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Acesso criado", style = MaterialTheme.typography.titleMedium)
+                        Text("Compartilhe as instruções com ${signer.fullName}.")
+                        Text("A senha temporária será exibida somente nesta mensagem de compartilhamento.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { shareSignerAccess(context, signer, invitePassword) },
+                                shape = MaterialTheme.shapes.small,
+                            ) {
+                                Text("Compartilhar acesso")
+                            }
+                            TextButton(onClick = {
+                                inviteSigner = null
+                                invitePassword = ""
+                            }) {
+                                Text("Fechar")
+                            }
+                        }
+                    }
+                }
+            }
         }
         if (showForm) {
             item {
@@ -123,7 +153,6 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                         OutlinedTextField(name, { name = it; error = null }, Modifier.fillMaxWidth(), label = { Text("Nome completo") })
                         OutlinedTextField(email, { email = it; error = null }, Modifier.fillMaxWidth(), label = { Text("E-mail") }, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Email))
                         OutlinedTextField(phone, { phone = it; error = null }, Modifier.fillMaxWidth(), label = { Text("Telefone") })
-                        OutlinedTextField(password, { password = it; error = null }, Modifier.fillMaxWidth(), label = { Text(if (editingId == null) "Senha" else "Nova senha (opcional)") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Password))
                         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         Button(onClick = {
                             val current = signers.firstOrNull { it.id == editingId }
@@ -131,22 +160,31 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                                 name.isBlank() -> "Informe o nome completo."
                                 !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> "Informe um e-mail válido."
                                 phone.isBlank() -> "Informe o telefone."
-                                editingId == null && password.length < 6 -> "A senha deve ter pelo menos 6 caracteres."
                                 signers.any { it.email.equals(email.trim(), true) && it.id != editingId } -> "Este e-mail já está cadastrado."
                                 else -> null
                             }
                             if (error == null) {
+                                val generatedPassword = if (editingId == null) generateTemporaryPassword() else ""
                                 val signer = Signer(
                                     id = editingId ?: UUID.randomUUID().toString(),
                                     fullName = name.trim(),
                                     email = email.trim().lowercase(),
                                     active = current?.active ?: true,
                                     phone = phone.trim(),
-                                    passwordHash = if (password.isBlank()) current?.passwordHash.orEmpty() else PasswordHasher().hash(password.toCharArray()),
+                                    passwordHash = if (editingId == null) {
+                                        PasswordHasher().hash(generatedPassword.toCharArray())
+                                    } else {
+                                        current?.passwordHash.orEmpty()
+                                    },
                                 )
                                 scope.launch {
                                     runCatching { repository.save(signer) }
                                         .onSuccess {
+                                            if (editingId == null) {
+                                                inviteSigner = signer
+                                                invitePassword = generatedPassword
+                                                feedback = "Signatário cadastrado. Compartilhe as instruções de acesso."
+                                            }
                                             clearForm()
                                             reload()
                                         }
@@ -166,16 +204,33 @@ internal fun PersistentSignersScreen(canManage: Boolean, repository: SignerRepos
                 signer = signer,
                 selected = selectedSignerId == signer.id,
                 onSelect = { selectedSignerId = signer.id },
+                onShare = {
+                    if (signer.accountRole != br.com.fiap.fides.domain.model.UserRole.ADMIN) {
+                        val temporaryPassword = generateTemporaryPassword()
+                        val updatedSigner = signer.copy(
+                            passwordHash = PasswordHasher().hash(temporaryPassword.toCharArray()),
+                        )
+                        scope.launch {
+                            runCatching { repository.save(updatedSigner) }
+                                .onSuccess {
+                                    shareSignerAccess(context, updatedSigner, temporaryPassword)
+                                    feedback = "Nova senha temporária preparada para compartilhamento."
+                                }
+                                .onFailure { feedback = "Não foi possível preparar o acesso." }
+                        }
+                    }
+                },
                 onEdit = {
+                    if (signer.accountRole != br.com.fiap.fides.domain.model.UserRole.ADMIN) {
                     editingId = signer.id
                     name = signer.fullName
                     email = signer.email
                     phone = signer.phone
-                    password = ""
                     error = null
                     showForm = true
+                    }
                 },
-                onDelete = { pendingDelete = signer },
+                onDelete = { if (signer.accountRole != br.com.fiap.fides.domain.model.UserRole.ADMIN) pendingDelete = signer },
             )
         }
     }
@@ -205,6 +260,7 @@ private fun PersistentSignerCard(
     signer: Signer,
     selected: Boolean,
     onSelect: () -> Unit,
+    onShare: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -215,15 +271,43 @@ private fun PersistentSignerCard(
             Column(Modifier.weight(1f)) {
                 Text(signer.fullName, style = MaterialTheme.typography.titleMedium)
                 Text(signer.email, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(signer.phone, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (selected) {
-                    Text("Selecionado", color = MaterialTheme.colorScheme.primary)
+                Text(if (signer.phone.isBlank()) "Telefone não informado" else signer.phone, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (signer.accountRole == br.com.fiap.fides.domain.model.UserRole.ADMIN) {
+                    Text("Administrador elegível para assinatura", color = MaterialTheme.colorScheme.primary)
                 }
-                Row {
-                    TextButton(onClick = onEdit) { Text("Editar") }
-                    TextButton(onClick = onDelete) { Text("Excluir") }
+                if (selected) {
+                    Text("Selecionado", color = MaterialTheme.colorScheme.tertiary)
+                }
+                if (signer.accountRole != br.com.fiap.fides.domain.model.UserRole.ADMIN) {
+                    Column {
+                        TextButton(onClick = onShare) { Text("Compartilhar acesso") }
+                        Row {
+                            TextButton(onClick = onEdit) { Text("Editar") }
+                            TextButton(onClick = onDelete) { Text("Excluir") }
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+private fun generateTemporaryPassword(): String {
+    val bytes = ByteArray(12)
+    SecureRandom().nextBytes(bytes)
+    return bytes.joinToString("") { "%02x".format(it) }
+}
+
+private fun shareSignerAccess(context: Context, signer: Signer, temporaryPassword: String) {
+    val message = "Fides\n\nOlá, ${signer.fullName}. Você recebeu uma solicitação de assinatura.\n\nAcesse o aplicativo Fides com:\nE-mail: ${signer.email}\nSenha temporária: $temporaryPassword\n\nAltere a senha após o primeiro acesso."
+    context.startActivity(
+        Intent.createChooser(
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, "Convite para assinar no Fides")
+                putExtra(Intent.EXTRA_TEXT, message)
+            },
+            "Compartilhar acesso",
+        ),
+    )
 }

@@ -11,6 +11,8 @@ interface DocumentRepository {
 
     suspend fun getById(id: String): Document?
 
+    suspend fun getByValidationToken(token: String): Document?
+
     suspend fun save(document: Document)
 
     suspend fun delete(id: String)

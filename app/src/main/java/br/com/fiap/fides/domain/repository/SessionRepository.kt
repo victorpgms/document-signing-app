@@ -8,6 +8,7 @@ data class UserSession(
     val email: String,
     val displayName: String,
     val role: UserRole,
+    val phone: String = "",
 )
 
 interface SessionRepository {
